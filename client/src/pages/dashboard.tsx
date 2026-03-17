@@ -158,10 +158,15 @@ function BattleSection({ battle, icon: Icon, iconColor }: { battle: BattleGroup;
                 {team.titleOdds}
               </span>
             )}
+            {team.relegationOdds && (
+              <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-red-600/20 text-red-300 border-red-500/30">
+                {team.relegationOdds}
+              </span>
+            )}
             <CompetitionBadges competitions={team.activeCompetitions} />
             <div className="flex-1" />
             <FormIndicator form={team.recentForm} />
-            {battle.type === "relegation" && team.zone?.toLowerCase().includes("relegation") && (
+            {battle.type === "relegation" && team.zone?.toLowerCase().includes("relegation") && !team.relegationOdds && (
               <Badge variant="destructive" className="text-[8px] px-1 py-0">REL</Badge>
             )}
             <span className="text-[10px] text-muted-foreground tabular-nums">{team.gamesPlayed}gp</span>
@@ -464,9 +469,16 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <Trophy className="w-3 h-3 text-yellow-500" />
-            <span className="text-[10px] text-muted-foreground">= Title contender (% = implied odds of winning the league, via Oddschecker)</span>
+          <div className="mt-2 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-3 h-3 text-yellow-500" />
+              <span className="text-[10px] text-muted-foreground">= Title contender</span>
+              <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-yellow-600/20 text-yellow-300 border-yellow-500/30">%</span>
+              <span className="text-[10px] text-muted-foreground">= odds of winning the league</span>
+              <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-red-600/20 text-red-300 border-red-500/30">%</span>
+              <span className="text-[10px] text-muted-foreground">= odds of being relegated</span>
+              <span className="text-[10px] text-muted-foreground/60 ml-1">(via Kalshi prediction markets)</span>
+            </div>
           </div>
         </div>
       </div>
@@ -474,7 +486,7 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="border-t border-border mt-4 py-4">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
-          <p className="text-[10px] text-muted-foreground">Data from ESPN &amp; DraftKings. Odds from Oddschecker. News from ESPN &amp; BBC Sport.</p>
+          <p className="text-[10px] text-muted-foreground">Data from ESPN &amp; DraftKings. Prediction markets via <a href="https://kalshi.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Kalshi</a>. News from ESPN &amp; BBC Sport.</p>
           <PerplexityAttribution />
         </div>
       </footer>

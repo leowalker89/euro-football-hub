@@ -1,4 +1,5 @@
 import { LEAGUES, COMPETITIONS, LEAGUE_CUPS, EURO_COMPS, type LeagueSlug, type StandingEntry, type Match, type Article, type LeagueData, type BattleGroup, type MatchOdds } from "@shared/schema";
+import { fetchLeagueOdds, getTitleOddsForTeam, getRelegationOddsForTeam, type LeagueOdds } from "./kalshi";
 
 const ESPN_BASE = "https://site.api.espn.com/apis";
 
@@ -349,18 +350,17 @@ export async function fetchUpcomingMatches(slug: LeagueSlug): Promise<Match[]> {
   return upcoming;
 }
 
-// Title odds data: implied probability of winning the league (from Covers.com / Oddschecker, Mar 2026)
-const TITLE_ODDS: Record<string, Record<string, number>> = {
-  "eng.1": { "Arsenal": 82, "Manchester City": 22 },
-  "ger.1": { "Bayern Munich": 99.9, "Borussia Dortmund": 0.8 },
-  "ita.1": { "Internazionale": 91, "AC Milan": 9.1, "Napoli": 3.7 },
-  "esp.1": { "Barcelona": 80, "Real Madrid": 25 },
-  "fra.1": { "Paris Saint-Germain": 95, "Lens": 7.7, "Marseille": 0.5, "Lyon": 0.4 },
+// Hardcoded fallback odds in case Kalshi API is unavailable
+const FALLBACK_TITLE_ODDS: Record<string, Record<string, number>> = {
+  "eng.1": { "Arsenal": 88, "Manchester City": 8 },
+  "ger.1": { "Bayern Munich": 99 },
+  "ita.1": { "Internazionale": 90, "AC Milan": 7, "Napoli": 4 },
+  "esp.1": { "Barcelona": 78, "Real Madrid": 19 },
+  "fra.1": { "Paris Saint-Germain": 91, "Lens": 7 },
 };
 
-// Check if a team name matches any key in the odds map (fuzzy: substring match)
-function getTitleOdds(teamName: string, slug: LeagueSlug): number | null {
-  const leagueOdds = TITLE_ODDS[slug];
+function getFallbackTitleOdds(teamName: string, slug: LeagueSlug): number | null {
+  const leagueOdds = FALLBACK_TITLE_ODDS[slug];
   if (!leagueOdds) return null;
   for (const [name, odds] of Object.entries(leagueOdds)) {
     if (teamName.includes(name) || name.includes(teamName)) return odds;
@@ -369,7 +369,7 @@ function getTitleOdds(teamName: string, slug: LeagueSlug): number | null {
 }
 
 // Smart battle grouping
-export function computeBattles(standings: StandingEntry[], slug: LeagueSlug): BattleGroup[] {
+export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kalshiOdds?: LeagueOdds): BattleGroup[] {
   if (standings.length === 0) return [];
 
   const config = LEAGUES[slug];
@@ -389,9 +389,12 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug): Ba
     const canCatch = (team.maxPossiblePoints || 0) >= leader.points;
     const plausible = gap <= Math.ceil(remaining * 1.5);
     const realistic = !(gap > 15 && remaining <= 10);
-    // Also consider betting odds: if a team has <5% implied odds, skip them
+    // Use Kalshi odds if available, fall back to hardcoded
+    const odds = kalshiOdds
+      ? getTitleOddsForTeam(team.teamName, kalshiOdds)
+      : getFallbackTitleOdds(team.teamName, slug);
+    // If a team has <5% implied odds, skip them
     // If no odds data exists and gap is large (>10), also skip (avoids false positives)
-    const odds = getTitleOdds(team.teamName, slug);
     const hasRealisticOdds = odds !== null ? odds >= 5 : gap <= 10;
     if (canCatch && plausible && realistic && hasRealisticOdds && team.rank <= 8) {
       titleContenderIds.add(team.teamId);
@@ -421,11 +424,13 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug): Ba
       if (!euroTeamIds.has(team.teamId)) {
         euroTeamIds.add(team.teamId);
         // Mark title contenders on the team object
-        const odds = getTitleOdds(team.teamName, slug);
+        const titleOddsVal = kalshiOdds
+          ? getTitleOddsForTeam(team.teamName, kalshiOdds)
+          : getFallbackTitleOdds(team.teamName, slug);
         const enriched = { ...team };
         if (isTitleTeam) {
           enriched.isTitleContender = true;
-          if (odds !== null) enriched.titleOdds = `${odds}%`;
+          if (titleOddsVal !== null) enriched.titleOdds = `${titleOddsVal}%`;
         }
         euroTeams.push(enriched);
       }
@@ -478,7 +483,15 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug): Ba
     const gapToSafety = lastSafeTeam ? lastSafeTeam.points - team.points : 0;
     // Include relegated teams + those within 6 points of the drop zone
     if (isInRelZone || (firstRelTeam && team.points - firstRelTeam.points <= 6 && team.rank >= totalTeams - relSpots - 3)) {
-      relTeams.push(team);
+      // Enrich with relegation odds from Kalshi
+      const relOdds = kalshiOdds
+        ? getRelegationOddsForTeam(team.teamName, kalshiOdds)
+        : null;
+      const enriched = { ...team };
+      if (relOdds !== null && relOdds > 0) {
+        enriched.relegationOdds = `${relOdds}%`;
+      }
+      relTeams.push(enriched);
     }
   }
   relTeams.sort((a, b) => a.rank - b.rank);
@@ -650,12 +663,13 @@ async function fetchActiveCompetitions(slug: LeagueSlug): Promise<Map<string, Co
 
 export async function fetchLeagueData(slug: LeagueSlug): Promise<LeagueData> {
   const config = LEAGUES[slug];
-  const [standings, recentMatches, upcomingMatches, news, activeComps] = await Promise.all([
+  const [standings, recentMatches, upcomingMatches, news, activeComps, kalshiOdds] = await Promise.all([
     fetchStandings(slug),
     fetchRecentMatches(slug),
     fetchUpcomingMatches(slug),
     fetchNews(slug),
     fetchActiveCompetitions(slug),
+    fetchLeagueOdds(slug).catch(() => null),
   ]);
 
   // Enrich standings with active competition data
@@ -666,7 +680,8 @@ export async function fetchLeagueData(slug: LeagueSlug): Promise<LeagueData> {
     }
   }
 
-  const battles = computeBattles(standings, slug);
+  const battles = computeBattles(standings, slug, kalshiOdds || undefined);
+  const hasKalshiData = kalshiOdds !== null && (kalshiOdds.title.length > 0 || kalshiOdds.relegation.length > 0);
 
   return {
     slug,
@@ -678,6 +693,7 @@ export async function fetchLeagueData(slug: LeagueSlug): Promise<LeagueData> {
     upcomingMatches,
     news,
     battles,
+    oddsSource: hasKalshiData ? "kalshi" : "fallback",
     lastUpdated: new Date().toISOString(),
   };
 }

@@ -62,6 +62,7 @@ export const standingEntrySchema = z.object({
   maxPossiblePoints: z.number().optional(), // theoretical max
   isTitleContender: z.boolean().optional(), // team is a realistic title contender
   titleOdds: z.string().optional(), // implied probability of winning the title, e.g. "82%"
+  relegationOdds: z.string().optional(), // implied probability of being relegated, e.g. "43%"
   activeCompetitions: z.array(z.object({
     slug: z.string(),
     name: z.string(),
@@ -164,6 +165,7 @@ export const leagueDataSchema = z.object({
   upcomingMatches: z.array(matchSchema),
   news: z.array(articleSchema),
   battles: z.array(battleGroupSchema).optional(),
+  oddsSource: z.string().optional(), // "kalshi" or "fallback"
   lastUpdated: z.string(),
 });
 

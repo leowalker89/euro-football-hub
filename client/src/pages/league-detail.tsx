@@ -328,6 +328,11 @@ function BattleCard({ battle, icon: Icon, iconColor }: { battle: BattleGroup; ic
                   {team.titleOdds}
                 </span>
               )}
+              {team.relegationOdds && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border leading-tight bg-red-600/20 text-red-300 border-red-500/30">
+                  {team.relegationOdds}
+                </span>
+              )}
               <CompetitionBadges competitions={team.activeCompetitions} size="md" />
               <div className="flex-1" />
               <FormIndicator form={team.recentForm} />
@@ -488,8 +493,17 @@ export default function LeagueDetail() {
                 <span className="text-muted-foreground/50">|</span>
                 <span className="flex items-center gap-1 text-[10px]">
                   <Trophy className="w-3 h-3 text-yellow-500" />
-                  <span className="text-muted-foreground">Title contender (% = betting odds)</span>
+                  <span className="text-muted-foreground">Title contender</span>
                 </span>
+                <span className="flex items-center gap-1 text-[10px]">
+                  <span className="font-bold px-1 py-0 rounded border leading-tight bg-yellow-600/20 text-yellow-300 border-yellow-500/30">%</span>
+                  <span className="text-muted-foreground">Title odds</span>
+                </span>
+                <span className="flex items-center gap-1 text-[10px]">
+                  <span className="font-bold px-1 py-0 rounded border leading-tight bg-red-600/20 text-red-300 border-red-500/30">%</span>
+                  <span className="text-muted-foreground">Relegation odds</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground/60">(via Kalshi)</span>
               </div>
             </div>
           </TabsContent>
@@ -534,7 +548,7 @@ export default function LeagueDetail() {
 
       <footer className="border-t border-border mt-8 py-4">
         <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
-          <p className="text-[10px] text-muted-foreground">Data from ESPN &amp; DraftKings. News from ESPN &amp; BBC Sport.</p>
+          <p className="text-[10px] text-muted-foreground">Data from ESPN &amp; DraftKings. Prediction markets via <a href="https://kalshi.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Kalshi</a>. News from ESPN &amp; BBC Sport.</p>
           <PerplexityAttribution />
         </div>
       </footer>
