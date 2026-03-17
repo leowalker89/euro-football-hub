@@ -118,27 +118,43 @@ export interface LeagueOdds {
   lastUpdated: string;
 }
 
-async function fetchKalshiMarkets(seriesTicker: string): Promise<any[]> {
-  try {
-    const res = await fetch(
-      `${KALSHI_BASE}/markets?limit=30&status=open&series_ticker=${seriesTicker}`,
-      {
-        headers: {
-          "Accept": "application/json",
-          "User-Agent": "EuroFootballHub/2.0",
-        },
+async function fetchKalshiMarkets(seriesTicker: string, retries = 2): Promise<any[]> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // Don't filter by status — some markets switch between open/active
+      const res = await fetch(
+        `${KALSHI_BASE}/markets?limit=40&series_ticker=${seriesTicker}`,
+        {
+          headers: {
+            "Accept": "application/json",
+            "User-Agent": "EuroFootballHub/2.0",
+          },
+        }
+      );
+      if (!res.ok) {
+        console.error(`[Kalshi] API error: ${res.status} for ${seriesTicker} (attempt ${attempt + 1})`);
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        return [];
       }
-    );
-    if (!res.ok) {
-      console.error(`Kalshi API error: ${res.status} for ${seriesTicker}`);
+      const data = await res.json();
+      const markets = data.markets || [];
+      // Filter out finalized/settled markets — keep open + active
+      const liveMarkets = markets.filter((m: any) => m.status !== "finalized" && m.status !== "settled");
+      console.log(`[Kalshi] ${seriesTicker}: ${liveMarkets.length} live markets (${markets.length} total)`);
+      return liveMarkets;
+    } catch (error) {
+      console.error(`[Kalshi] Error fetching ${seriesTicker} (attempt ${attempt + 1}):`, error);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
       return [];
     }
-    const data = await res.json();
-    return data.markets || [];
-  } catch (error) {
-    console.error(`Error fetching Kalshi markets for ${seriesTicker}:`, error);
-    return [];
   }
+  return [];
 }
 
 function parseMarkets(markets: any[]): KalshiOdds[] {
@@ -174,6 +190,11 @@ export async function fetchLeagueOdds(slug: LeagueSlug): Promise<LeagueOdds> {
     relegation: parseMarkets(relMarkets),
     lastUpdated: new Date().toISOString(),
   };
+
+  // Log what we found for debugging
+  const topTitle = odds.title.filter(t => t.probability >= 5).map(t => `${t.teamName}(${t.probability}%)`);
+  const topRel = odds.relegation.filter(t => t.probability >= 5).map(t => `${t.teamName}(${t.probability}%)`);
+  console.log(`[Kalshi] ${slug}: title=[${topTitle.join(", ")}] relegation=[${topRel.join(", ")}]`);
 
   setCache(cacheKey, odds);
   return odds;
