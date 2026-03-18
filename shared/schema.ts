@@ -178,3 +178,85 @@ export const dashboardSchema = z.object({
 });
 
 export type DashboardData = z.infer<typeof dashboardSchema>;
+
+// ---- European Cup Types ----
+
+// A team in a knockout tie
+export const cupTeamSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  abbreviation: z.string(),
+  logo: z.string(),
+  seed: z.number().optional(),
+});
+
+export type CupTeam = z.infer<typeof cupTeamSchema>;
+
+// A single match (leg) in a knockout tie
+export const cupMatchSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  status: z.string(), // STATUS_FULL_TIME, STATUS_SCHEDULED, STATUS_IN_PROGRESS, etc.
+  statusDetail: z.string().optional(),
+  homeTeam: cupTeamSchema.extend({ score: z.number().nullable() }),
+  awayTeam: cupTeamSchema.extend({ score: z.number().nullable() }),
+  leg: z.string().optional(), // "1st Leg", "2nd Leg", or empty for single-leg
+  odds: matchOddsSchema.optional(),
+});
+
+export type CupMatch = z.infer<typeof cupMatchSchema>;
+
+// A knockout tie (two legs or single match)
+export const cupTieSchema = z.object({
+  team1: cupTeamSchema,
+  team2: cupTeamSchema,
+  matches: z.array(cupMatchSchema),
+  aggregateScore: z.string().optional(), // "3-1", "Tied 2-2"
+  aggregateNote: z.string().optional(), // "Arsenal advance 3-1 on aggregate"
+  winner: z.string().optional(), // team ID of winner, if decided
+  isComplete: z.boolean(),
+  team1TournamentOdds: z.number().nullable().optional(), // Kalshi win-tournament %
+  team2TournamentOdds: z.number().nullable().optional(),
+});
+
+export type CupTie = z.infer<typeof cupTieSchema>;
+
+// A round in the knockout bracket
+export const cupRoundSchema = z.object({
+  name: z.string(), // "Round of 16", "Quarter-finals", "Semi-finals", "Final"
+  ties: z.array(cupTieSchema),
+  isCurrent: z.boolean(), // is this the active round?
+});
+
+export type CupRound = z.infer<typeof cupRoundSchema>;
+
+// Tournament favorites ranking
+export const cupFavoriteSchema = z.object({
+  team: cupTeamSchema,
+  tournamentOdds: z.number(), // 0-100%
+  isEliminated: z.boolean(),
+  eliminatedBy: z.string().optional(), // team name that knocked them out
+});
+
+export type CupFavorite = z.infer<typeof cupFavoriteSchema>;
+
+// Full European cup data
+export const europeanCupDataSchema = z.object({
+  slug: z.string(), // "uefa.champions", "uefa.europa", "uefa.europa.conf"
+  name: z.string(),
+  shortName: z.string(),
+  currentRound: z.string(), // "Round of 16", etc.
+  rounds: z.array(cupRoundSchema),
+  favorites: z.array(cupFavoriteSchema),
+  oddsSource: z.string().optional(), // "kalshi" or "none"
+  lastUpdated: z.string(),
+});
+
+export type EuropeanCupData = z.infer<typeof europeanCupDataSchema>;
+
+// European cup config
+export const EURO_CUP_CONFIG: Record<string, { name: string; shortName: string; espnSlug: string; kalshiTicker: string; color: string; icon: string }> = {
+  "uefa.champions": { name: "Champions League", shortName: "UCL", espnSlug: "uefa.champions", kalshiTicker: "KXUCL", color: "#1a56db", icon: "⭐" },
+  "uefa.europa": { name: "Europa League", shortName: "UEL", espnSlug: "uefa.europa", kalshiTicker: "KXUEL", color: "#ea580c", icon: "🟠" },
+  "uefa.europa.conf": { name: "Conference League", shortName: "UECL", espnSlug: "uefa.europa.conf", kalshiTicker: "KXUECL", color: "#16a34a", icon: "🟢" },
+};

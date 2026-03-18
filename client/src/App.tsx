@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
 import LeagueDetail from "@/pages/league-detail";
+import EuropeanCups from "@/pages/european-cups";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 
@@ -14,6 +15,8 @@ function AppRouter() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/league/:slug" component={LeagueDetail} />
+      <Route path="/cups" component={EuropeanCups} />
+      <Route path="/cup/:slug" component={EuropeanCups} />
       <Route component={NotFound} />
     </Switch>
   );

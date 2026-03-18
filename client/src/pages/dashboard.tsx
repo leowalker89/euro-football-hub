@@ -383,6 +383,18 @@ export default function Dashboard() {
               <p className="text-[10px] text-muted-foreground">Top 5 European Leagues</p>
             </div>
           </div>
+          {/* Nav tabs */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs px-3 py-1.5 rounded-md bg-accent text-foreground font-medium cursor-default">
+              Leagues
+            </span>
+            <Link href="/cups">
+              <span className="text-xs px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors cursor-pointer">
+                Cups
+              </span>
+            </Link>
+          </div>
+
           <div className="flex items-center gap-3">
             {dataUpdatedAt > 0 && (
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
