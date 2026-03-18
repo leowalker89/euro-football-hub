@@ -401,6 +401,23 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
     }
   }
 
+  // Backfill: if a lower-ranked team is a title contender, all higher-ranked
+  // teams between them and the leader must also be contenders (can't skip over
+  // a team with more points). E.g. if 4th place is flagged, 2nd and 3rd must be too.
+  if (titleContenderIds.size > 1) {
+    let lowestContenderRank = 1;
+    for (const team of standings) {
+      if (titleContenderIds.has(team.teamId) && team.rank > lowestContenderRank) {
+        lowestContenderRank = team.rank;
+      }
+    }
+    for (const team of standings) {
+      if (team.rank <= lowestContenderRank) {
+        titleContenderIds.add(team.teamId);
+      }
+    }
+  }
+
   // --- EUROPEAN PLACES (with title contenders merged in) ---
   const totalEuroSpots = config.uclSpots + config.europaSpots + config.confSpots;
   const lastEuroTeam = standings[totalEuroSpots - 1];
