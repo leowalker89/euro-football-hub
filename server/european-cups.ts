@@ -668,6 +668,7 @@ export async function fetchEuropeanCupData(slug: string): Promise<EuropeanCupDat
     slug,
     name: config.name,
     shortName: config.shortName,
+    logo: config.logo,
     currentRound,
     rounds,
     favorites,

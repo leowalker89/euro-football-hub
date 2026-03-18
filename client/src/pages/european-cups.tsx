@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { EuropeanCupData, CupTie, CupRound, CupFavorite, CupMatch } from "@shared/schema";
+import type { EuropeanCupData, CupTie, CupRound, CupFavorite, CupMatch, DomesticCupData, DomesticCupMatch } from "@shared/schema";
 import { Link } from "wouter";
-import { RefreshCw, Trophy, ArrowLeft, ChevronRight, Clock, Check, Swords, Crown, Minus } from "lucide-react";
+import { RefreshCw, Trophy, ArrowLeft, ChevronRight, Clock, Check, Swords, Crown, Minus, Globe, Flag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -276,7 +276,11 @@ function CompetitionOverview({ cup }: { cup: EuropeanCupData }) {
       <Link href={`/cup/${encodeURIComponent(cup.slug)}`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors cursor-pointer group">
           <div className="flex items-center gap-3">
-            <span className="text-xl">{cup.slug === "uefa.champions" ? "⭐" : cup.slug === "uefa.europa" ? "🟠" : "🟢"}</span>
+            {cup.logo ? (
+              <img src={cup.logo} alt={cup.name} className="w-6 h-6 object-contain" loading="lazy" crossOrigin="anonymous" />
+            ) : (
+              <span className="text-xl">{cup.slug === "uefa.champions" ? "⭐" : cup.slug === "uefa.europa" ? "🟠" : "🟢"}</span>
+            )}
             <div>
               <h2 className="font-semibold text-sm text-foreground">{cup.name}</h2>
               <p className="text-xs text-muted-foreground">{cup.currentRound}</p>
@@ -438,6 +442,122 @@ function CupCardSkeleton() {
   );
 }
 
+// ---- Domestic Cup Card ----
+function DomesticCupCard({ cup }: { cup: DomesticCupData }) {
+  const allMatches = [...cup.recentResults, ...cup.upcomingMatches];
+
+  return (
+    <Card className="bg-card border-card-border overflow-hidden" data-testid={`cup-card-${cup.slug}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-3">
+          <img src={cup.logo} alt={cup.name} className="w-6 h-6 object-contain" loading="lazy" crossOrigin="anonymous" />
+          <div>
+            <h2 className="font-semibold text-sm text-foreground">{cup.name}</h2>
+            <p className="text-xs text-muted-foreground">{cup.currentRound} {cup.countryFlag}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Upcoming matches */}
+      {cup.upcomingMatches.length > 0 && (
+        <div className="px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Upcoming</span>
+          </div>
+          <div className="space-y-1.5">
+            {cup.upcomingMatches.map(match => (
+              <DomesticMatchRow key={match.id} match={match} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent results */}
+      {cup.recentResults.length > 0 && (
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Check className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent Results</span>
+          </div>
+          <div className="space-y-1.5">
+            {cup.recentResults.slice(0, 4).map(match => (
+              <DomesticMatchRow key={match.id} match={match} />
+            ))}
+            {cup.recentResults.length > 4 && (
+              <p className="text-[10px] text-muted-foreground/50 text-center">+ {cup.recentResults.length - 4} more</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {allMatches.length === 0 && (
+        <div className="px-4 py-6 text-center">
+          <p className="text-xs text-muted-foreground/50">No current matches</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Domestic cup match row
+function DomesticMatchRow({ match }: { match: DomesticCupMatch }) {
+  const isScheduled = match.status === "STATUS_SCHEDULED";
+  const isLive = match.status.includes("PROGRESS") || match.status.includes("HALF");
+  const isPenalties = match.statusText.toLowerCase().includes("penalties");
+
+  return (
+    <div className={`flex items-center gap-1.5 py-1.5 px-2 rounded text-xs ${
+      isLive ? "bg-green-500/5 border border-green-500/20" : "bg-muted/10"
+    }`}>
+      {/* Home team */}
+      {match.homeTeam.logo && (
+        <img src={match.homeTeam.logo} alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" loading="lazy" crossOrigin="anonymous" />
+      )}
+      <span className={`truncate ${
+        match.homeTeam.winner ? "font-semibold text-foreground" : 
+        !isScheduled && !match.homeTeam.winner ? "text-muted-foreground/60" : "text-foreground/80"
+      }`}>
+        {match.homeTeam.name}
+      </span>
+
+      {/* Score / VS */}
+      <span className="text-muted-foreground/50 mx-0.5 flex-shrink-0 tabular-nums">
+        {isScheduled ? "vs" : (
+          <span className="font-medium text-foreground/60">
+            {match.homeTeam.score} - {match.awayTeam.score}
+          </span>
+        )}
+      </span>
+
+      {/* Away team */}
+      {match.awayTeam.logo && (
+        <img src={match.awayTeam.logo} alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" loading="lazy" crossOrigin="anonymous" />
+      )}
+      <span className={`truncate ${
+        match.awayTeam.winner ? "font-semibold text-foreground" : 
+        !isScheduled && !match.awayTeam.winner ? "text-muted-foreground/60" : "text-foreground/80"
+      }`}>
+        {match.awayTeam.name}
+      </span>
+
+      <div className="flex-1" />
+
+      {/* Status */}
+      {isLive ? (
+        <span className="text-[9px] font-medium text-green-400">LIVE</span>
+      ) : isScheduled ? (
+        <span className="text-[9px] text-muted-foreground/50">{formatMatchDate(match.date)}</span>
+      ) : isPenalties ? (
+        <span className="text-[9px] text-muted-foreground/50">Pens</span>
+      ) : (
+        <span className="text-[9px] text-muted-foreground/50">FT</span>
+      )}
+    </div>
+  );
+}
+
 // ---- Main Page ----
 export default function EuropeanCups() {
   const { refetchInterval } = useAutoRefresh();
@@ -449,7 +569,14 @@ export default function EuropeanCups() {
     staleTime: 60_000,
   });
 
+  const { data: domesticCups, isLoading: domesticLoading } = useQuery<DomesticCupData[]>({
+    queryKey: ["/api/domestic-cups"],
+    refetchInterval,
+    staleTime: 60_000,
+  });
+
   const activeCup = selectedCup ? cups?.find(c => c.slug === selectedCup) : null;
+  const latestUpdate = Math.max(dataUpdatedAt || 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -467,7 +594,7 @@ export default function EuropeanCups() {
                 </svg>
                 <div>
                   <h1 className="text-base font-bold text-foreground tracking-tight">Euro Football Hub</h1>
-                  <p className="text-[10px] text-muted-foreground">European Competitions</p>
+                  <p className="text-[10px] text-muted-foreground">Cup Competitions</p>
                 </div>
               </div>
             </Link>
@@ -486,10 +613,10 @@ export default function EuropeanCups() {
           </div>
 
           <div className="flex items-center gap-3">
-            {dataUpdatedAt > 0 && (
+            {latestUpdate > 0 && (
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <RefreshCw className="w-3 h-3" />
-                <span>Updated {formatDistanceToNow(dataUpdatedAt, { addSuffix: true })}</span>
+                <span>Updated {formatDistanceToNow(latestUpdate, { addSuffix: true })}</span>
               </div>
             )}
           </div>
@@ -515,7 +642,11 @@ export default function EuropeanCups() {
               Back to all competitions
             </button>
             <div className="flex items-center gap-3 mb-6">
-              <span className="text-2xl">{activeCup.slug === "uefa.champions" ? "⭐" : activeCup.slug === "uefa.europa" ? "🟠" : "🟢"}</span>
+              {activeCup.logo ? (
+                <img src={activeCup.logo} alt={activeCup.name} className="w-8 h-8 object-contain" loading="lazy" crossOrigin="anonymous" />
+              ) : (
+                <span className="text-2xl">{activeCup.slug === "uefa.champions" ? "⭐" : activeCup.slug === "uefa.europa" ? "🟠" : "🟢"}</span>
+              )}
               <div>
                 <h2 className="text-lg font-bold text-foreground">{activeCup.name}</h2>
                 <p className="text-xs text-muted-foreground">{activeCup.currentRound}</p>
@@ -524,16 +655,40 @@ export default function EuropeanCups() {
             <CompetitionDetail cup={activeCup} />
           </div>
         ) : (
-          /* Overview: all 3 competitions */
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {isLoading
-              ? [...Array(3)].map((_, i) => <CupCardSkeleton key={i} />)
-              : cups?.map(cup => (
-                  <div key={cup.slug} onClick={() => setSelectedCup(cup.slug)} className="cursor-pointer">
-                    <CompetitionOverview cup={cup} />
-                  </div>
-                ))
-            }
+          <div className="space-y-8">
+            {/* European Cups Section */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Globe className="w-4 h-4 text-blue-400" />
+                <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">European Cups</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {isLoading
+                  ? [...Array(3)].map((_, i) => <CupCardSkeleton key={i} />)
+                  : cups?.map(cup => (
+                      <div key={cup.slug} onClick={() => setSelectedCup(cup.slug)} className="cursor-pointer">
+                        <CompetitionOverview cup={cup} />
+                      </div>
+                    ))
+                }
+              </div>
+            </section>
+
+            {/* Domestic Cups Section */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">Domestic Cups</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {domesticLoading
+                  ? [...Array(5)].map((_, i) => <CupCardSkeleton key={i} />)
+                  : domesticCups?.map(cup => (
+                      <DomesticCupCard key={cup.slug} cup={cup} />
+                    ))
+                }
+              </div>
+            </section>
           </div>
         )}
       </main>

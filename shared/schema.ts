@@ -27,11 +27,11 @@ export const EURO_COMPS = ["uefa.champions", "uefa.europa", "uefa.europa.conf"];
 
 // League configuration
 export const LEAGUES = {
-  "eng.1": { name: "Premier League", country: "England", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", color: "#3d195b", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 38 },
-  "ger.1": { name: "Bundesliga", country: "Germany", flag: "🇩🇪", color: "#d3010c", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 2, totalGames: 34 },
-  "ita.1": { name: "Serie A", country: "Italy", flag: "🇮🇹", color: "#024494", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 38 },
-  "esp.1": { name: "La Liga", country: "Spain", flag: "🇪🇸", color: "#ee8707", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 38 },
-  "fra.1": { name: "Ligue 1", country: "France", flag: "🇫🇷", color: "#091c3e", uclSpots: 3, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 34 },
+  "eng.1": { name: "Premier League", country: "England", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", color: "#3d195b", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 38, logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/23.png" },
+  "ger.1": { name: "Bundesliga", country: "Germany", flag: "🇩🇪", color: "#d3010c", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 2, totalGames: 34, logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/10.png" },
+  "ita.1": { name: "Serie A", country: "Italy", flag: "🇮🇹", color: "#024494", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 38, logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/12.png" },
+  "esp.1": { name: "La Liga", country: "Spain", flag: "🇪🇸", color: "#ee8707", uclSpots: 4, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 38, logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/15.png" },
+  "fra.1": { name: "Ligue 1", country: "France", flag: "🇫🇷", color: "#091c3e", uclSpots: 3, europaSpots: 1, confSpots: 1, relegationSpots: 3, totalGames: 34, logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/9.png" },
 } as const;
 
 export type LeagueSlug = keyof typeof LEAGUES;
@@ -160,6 +160,7 @@ export const leagueDataSchema = z.object({
   name: z.string(),
   country: z.string(),
   flag: z.string(),
+  logo: z.string().optional(),
   standings: z.array(standingEntrySchema),
   recentMatches: z.array(matchSchema),
   upcomingMatches: z.array(matchSchema),
@@ -248,6 +249,7 @@ export const europeanCupDataSchema = z.object({
   slug: z.string(), // "uefa.champions", "uefa.europa", "uefa.europa.conf"
   name: z.string(),
   shortName: z.string(),
+  logo: z.string().optional(),
   currentRound: z.string(), // "Round of 16", etc.
   rounds: z.array(cupRoundSchema),
   favorites: z.array(cupFavoriteSchema),
@@ -257,9 +259,64 @@ export const europeanCupDataSchema = z.object({
 
 export type EuropeanCupData = z.infer<typeof europeanCupDataSchema>;
 
+// Domestic cup match (simpler than European ties)
+export const domesticCupMatchSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  status: z.string(), // ESPN status type
+  statusText: z.string(), // Human readable: "Full Time", "Scheduled", etc.
+  homeTeam: z.object({
+    id: z.string(),
+    name: z.string(),
+    abbreviation: z.string(),
+    logo: z.string(),
+    score: z.number().nullable(),
+    winner: z.boolean(),
+    penaltyScore: z.number().nullable().optional(),
+  }),
+  awayTeam: z.object({
+    id: z.string(),
+    name: z.string(),
+    abbreviation: z.string(),
+    logo: z.string(),
+    score: z.number().nullable(),
+    winner: z.boolean(),
+    penaltyScore: z.number().nullable().optional(),
+  }),
+  note: z.string().optional(), // e.g. "advances 5-3 on penalties"
+  round: z.string().optional(), // e.g. "Quarter-Final"
+});
+
+export type DomesticCupMatch = z.infer<typeof domesticCupMatchSchema>;
+
+// Full domestic cup data
+export const domesticCupDataSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  shortName: z.string(),
+  country: z.string(),
+  countryFlag: z.string(),
+  logo: z.string(),
+  currentRound: z.string(),
+  recentResults: z.array(domesticCupMatchSchema), // completed matches in current/recent round
+  upcomingMatches: z.array(domesticCupMatchSchema), // scheduled future matches
+  lastUpdated: z.string(),
+});
+
+export type DomesticCupData = z.infer<typeof domesticCupDataSchema>;
+
 // European cup config
-export const EURO_CUP_CONFIG: Record<string, { name: string; shortName: string; espnSlug: string; kalshiTicker: string; color: string; icon: string }> = {
-  "uefa.champions": { name: "Champions League", shortName: "UCL", espnSlug: "uefa.champions", kalshiTicker: "KXUCL", color: "#1a56db", icon: "⭐" },
-  "uefa.europa": { name: "Europa League", shortName: "UEL", espnSlug: "uefa.europa", kalshiTicker: "KXUEL", color: "#ea580c", icon: "🟠" },
-  "uefa.europa.conf": { name: "Conference League", shortName: "UECL", espnSlug: "uefa.europa.conf", kalshiTicker: "KXUECL", color: "#16a34a", icon: "🟢" },
+export const EURO_CUP_CONFIG: Record<string, { name: string; shortName: string; espnSlug: string; kalshiTicker: string; color: string; icon: string; logo: string }> = {
+  "uefa.champions": { name: "Champions League", shortName: "UCL", espnSlug: "uefa.champions", kalshiTicker: "KXUCL", color: "#1a56db", icon: "⭐", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2.png" },
+  "uefa.europa": { name: "Europa League", shortName: "UEL", espnSlug: "uefa.europa", kalshiTicker: "KXUEL", color: "#ea580c", icon: "🟠", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2310.png" },
+  "uefa.europa.conf": { name: "Conference League", shortName: "UECL", espnSlug: "uefa.europa.conf", kalshiTicker: "KXUECL", color: "#16a34a", icon: "🟢", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/20296.png" },
+};
+
+// Domestic cup config
+export const DOMESTIC_CUP_CONFIG: Record<string, { name: string; shortName: string; espnSlug: string; country: string; countryFlag: string; leagueSlug: string; logo: string }> = {
+  "eng.fa": { name: "FA Cup", shortName: "FA", espnSlug: "eng.fa", country: "England", countryFlag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", leagueSlug: "eng.1", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/40.png" },
+  "ger.dfb_pokal": { name: "DFB-Pokal", shortName: "DFB", espnSlug: "ger.dfb_pokal", country: "Germany", countryFlag: "🇩🇪", leagueSlug: "ger.1", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2061.png" },
+  "ita.coppa_italia": { name: "Coppa Italia", shortName: "CI", espnSlug: "ita.coppa_italia", country: "Italy", countryFlag: "🇮🇹", leagueSlug: "ita.1", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/2192.png" },
+  "esp.copa_del_rey": { name: "Copa del Rey", shortName: "CdR", espnSlug: "esp.copa_del_rey", country: "Spain", countryFlag: "🇪🇸", leagueSlug: "esp.1", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/80.png" },
+  "fra.coupe_de_france": { name: "Coupe de France", shortName: "CdF", espnSlug: "fra.coupe_de_france", country: "France", countryFlag: "🇫🇷", leagueSlug: "fra.1", logo: "https://a.espncdn.com/i/leaguelogos/soccer/500-dark/182.png" },
 };

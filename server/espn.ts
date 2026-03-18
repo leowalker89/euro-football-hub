@@ -705,6 +705,7 @@ export async function fetchLeagueData(slug: LeagueSlug): Promise<LeagueData> {
     name: config.name,
     country: config.country,
     flag: config.flag,
+    logo: config.logo,
     standings,
     recentMatches,
     upcomingMatches,

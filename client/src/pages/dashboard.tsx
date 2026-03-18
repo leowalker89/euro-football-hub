@@ -282,7 +282,11 @@ function LeagueCard({ league }: { league: LeagueData }) {
       <Link href={`/league/${league.slug}`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors cursor-pointer group">
           <div className="flex items-center gap-3">
-            <span className="text-xl">{league.flag}</span>
+            {league.logo ? (
+              <img src={league.logo} alt={league.name} className="w-6 h-6 object-contain" loading="lazy" crossOrigin="anonymous" />
+            ) : (
+              <span className="text-xl">{league.flag}</span>
+            )}
             <div>
               <h2 className="font-semibold text-sm text-foreground">{league.name}</h2>
               <p className="text-xs text-muted-foreground">{league.country}</p>

@@ -404,7 +404,11 @@ export default function LeagueDetail() {
               </button>
             </Link>
             <div className="h-4 w-px bg-border" />
-            <span className="text-xl">{data.flag}</span>
+            {data.logo ? (
+              <img src={data.logo} alt={data.name} className="w-7 h-7 object-contain" loading="lazy" crossOrigin="anonymous" />
+            ) : (
+              <span className="text-xl">{data.flag}</span>
+            )}
             <div>
               <h1 className="text-base font-bold text-foreground">{data.name}</h1>
               <p className="text-[10px] text-muted-foreground">{data.country}</p>

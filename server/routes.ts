@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { LEAGUES, EURO_CUP_CONFIG, leagueSlugs, type LeagueSlug } from "@shared/schema";
 import { fetchAllLeagues, fetchLeagueData, fetchBBCNews } from "./espn";
 import { fetchAllEuropeanCups, fetchEuropeanCupData } from "./european-cups";
+import { fetchAllDomesticCups } from "./domestic-cups";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -81,6 +82,17 @@ export async function registerRoutes(
     } catch (error) {
       console.error(`European cup fetch error for ${fullSlug}:`, error);
       res.status(500).json({ error: "Failed to fetch competition data" });
+    }
+  });
+
+  // Domestic Cups: all domestic cup competitions
+  app.get("/api/domestic-cups", async (_req, res) => {
+    try {
+      const cups = await fetchAllDomesticCups();
+      res.json(cups);
+    } catch (error) {
+      console.error("Domestic cups fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch domestic cups data" });
     }
   });
 
