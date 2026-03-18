@@ -217,6 +217,9 @@ export const cupTieSchema = z.object({
   isComplete: z.boolean(),
   team1TournamentOdds: z.number().nullable().optional(), // Kalshi win-tournament %
   team2TournamentOdds: z.number().nullable().optional(),
+  team1AdvanceOdds: z.number().nullable().optional(), // % chance to advance from this tie
+  team2AdvanceOdds: z.number().nullable().optional(),
+  advanceOddsSource: z.enum(["kalshi", "implied", "none"]).optional(),
 });
 
 export type CupTie = z.infer<typeof cupTieSchema>;

@@ -60,10 +60,29 @@ function getStatusLabel(status: string): { label: string; color: string } {
 }
 
 // ---- Tie Card: Shows a matchup between two teams ----
+// Get the primary odds to display: advance odds take priority, then tournament odds
+function getDisplayOdds(tie: CupTie): { team1: number | null; team2: number | null; isAdvance: boolean; source: string } {
+  if (tie.team1AdvanceOdds != null || tie.team2AdvanceOdds != null) {
+    return {
+      team1: tie.team1AdvanceOdds ?? null,
+      team2: tie.team2AdvanceOdds ?? null,
+      isAdvance: true,
+      source: tie.advanceOddsSource === "kalshi" ? "Kalshi" : "implied",
+    };
+  }
+  return {
+    team1: tie.team1TournamentOdds ?? null,
+    team2: tie.team2TournamentOdds ?? null,
+    isAdvance: false,
+    source: "tournament",
+  };
+}
+
 function TieCard({ tie, theme }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"] }) {
   const isComplete = tie.isComplete;
   const team1Won = tie.winner === tie.team1.id;
   const team2Won = tie.winner === tie.team2.id;
+  const odds = getDisplayOdds(tie);
 
   return (
     <div className={`rounded-lg border ${isComplete ? "border-border/50" : "border-border"} bg-card overflow-hidden`}>
@@ -75,9 +94,13 @@ function TieCard({ tie, theme }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"]
           <span className={`text-xs font-medium flex-1 truncate ${team1Won ? "text-foreground" : "text-foreground/80"}`}>
             {tie.team1.name}
           </span>
-          {tie.team1TournamentOdds != null && tie.team1TournamentOdds > 0 && (
-            <span className={`text-[8px] font-bold px-1 py-0 rounded border leading-tight ${theme.badge}`}>
-              {tie.team1TournamentOdds}%
+          {odds.team1 != null && odds.team1 > 0 && !isComplete && (
+            <span className={`text-[8px] font-bold px-1 py-0 rounded border leading-tight ${
+              odds.isAdvance
+                ? (odds.team1 >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" : odds.team1 <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" : theme.badge)
+                : theme.badge
+            }`}>
+              {odds.team1}%
             </span>
           )}
           {/* Aggregate goals for team1 */}
@@ -94,9 +117,13 @@ function TieCard({ tie, theme }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"]
           <span className={`text-xs font-medium flex-1 truncate ${team2Won ? "text-foreground" : "text-foreground/80"}`}>
             {tie.team2.name}
           </span>
-          {tie.team2TournamentOdds != null && tie.team2TournamentOdds > 0 && (
-            <span className={`text-[8px] font-bold px-1 py-0 rounded border leading-tight ${theme.badge}`}>
-              {tie.team2TournamentOdds}%
+          {odds.team2 != null && odds.team2 > 0 && !isComplete && (
+            <span className={`text-[8px] font-bold px-1 py-0 rounded border leading-tight ${
+              odds.isAdvance
+                ? (odds.team2 >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" : odds.team2 <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" : theme.badge)
+                : theme.badge
+            }`}>
+              {odds.team2}%
             </span>
           )}
           {tie.aggregateScore && (
@@ -322,9 +349,13 @@ function TieRow({ tie, theme }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"] 
       <span className={`truncate ${team1Won ? "font-semibold text-foreground" : tie.isComplete && !team1Won ? "text-muted-foreground/50 line-through" : "text-foreground/80"}`}>
         {tie.team1.abbreviation}
       </span>
-      {tie.team1TournamentOdds != null && tie.team1TournamentOdds > 0 && (
-        <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${theme.badge}`}>{tie.team1TournamentOdds}%</span>
-      )}
+      {(() => { const odds = getDisplayOdds(tie); return odds.team1 != null && odds.team1 > 0 && !tie.isComplete ? (
+        <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${
+          odds.isAdvance
+            ? (odds.team1 >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" : odds.team1 <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" : theme.badge)
+            : theme.badge
+        }`}>{odds.team1}%</span>
+      ) : null; })()}
 
       {/* Score / VS */}
       <span className="text-muted-foreground/50 mx-0.5 flex-shrink-0">
@@ -340,9 +371,13 @@ function TieRow({ tie, theme }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"] 
       <span className={`truncate ${team2Won ? "font-semibold text-foreground" : tie.isComplete && !team2Won ? "text-muted-foreground/50 line-through" : "text-foreground/80"}`}>
         {tie.team2.abbreviation}
       </span>
-      {tie.team2TournamentOdds != null && tie.team2TournamentOdds > 0 && (
-        <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${theme.badge}`}>{tie.team2TournamentOdds}%</span>
-      )}
+      {(() => { const odds = getDisplayOdds(tie); return odds.team2 != null && odds.team2 > 0 && !tie.isComplete ? (
+        <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${
+          odds.isAdvance
+            ? (odds.team2 >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" : odds.team2 <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" : theme.badge)
+            : theme.badge
+        }`}>{odds.team2}%</span>
+      ) : null; })()}
 
       <div className="flex-1" />
 

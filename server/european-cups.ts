@@ -36,6 +36,23 @@ interface KalshiTournamentOdds {
   isEliminated: boolean; // finalized = eliminated
 }
 
+// Per-tie advance odds from Kalshi (e.g., KXUCLADVANCE)
+interface KalshiAdvanceOdds {
+  title: string;       // e.g. "Barcelona vs Newcastle"
+  team1Name: string;
+  team1Prob: number;   // 0-100
+  team2Name: string;
+  team2Prob: number;   // 0-100
+  isSettled: boolean;
+}
+
+// Kalshi advance series per competition (only UCL has one currently)
+const ADVANCE_SERIES: Record<string, string | undefined> = {
+  "uefa.champions": "KXUCLADVANCE",
+  "uefa.europa": undefined,
+  "uefa.europa.conf": undefined,
+};
+
 async function fetchTournamentOdds(kalshiTicker: string): Promise<KalshiTournamentOdds[]> {
   const cacheKey = `kalshi:cup:${kalshiTicker}`;
   const cached = getCached<KalshiTournamentOdds[]>(cacheKey, 30 * 60 * 1000);
@@ -68,6 +85,99 @@ async function fetchTournamentOdds(kalshiTicker: string): Promise<KalshiTourname
     console.error(`[Kalshi] Error fetching ${kalshiTicker}:`, error);
     return [];
   }
+}
+
+// Fetch per-tie advance odds from Kalshi (e.g., KXUCLADVANCE)
+async function fetchAdvanceOdds(seriesTicker: string | undefined): Promise<KalshiAdvanceOdds[]> {
+  if (!seriesTicker) return [];
+
+  const cacheKey = `kalshi:advance:${seriesTicker}`;
+  const cached = getCached<KalshiAdvanceOdds[]>(cacheKey, 15 * 60 * 1000);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(`${KALSHI_BASE}/markets?limit=40&series_ticker=${seriesTicker}`, {
+      headers: { "Accept": "application/json", "User-Agent": "EuroFootballHub/2.0" },
+    });
+    if (!res.ok) {
+      console.error(`[Kalshi] Advance API error: ${res.status} for ${seriesTicker}`);
+      return [];
+    }
+    const data = await res.json();
+    const markets = data.markets || [];
+
+    // Group markets by title (each tie has 2 markets)
+    const tieMap = new Map<string, { team: string; prob: number; settled: boolean }[]>();
+    for (const m of markets) {
+      const title = m.title || "";
+      const teamName = m.no_sub_title || m.yes_sub_title || "";
+      const prob = Math.round(parseFloat(m.last_price_dollars || "0") * 100);
+      const settled = m.status === "finalized" || m.status === "settled";
+      if (!tieMap.has(title)) tieMap.set(title, []);
+      tieMap.get(title)!.push({ team: teamName, prob, settled });
+    }
+
+    const results: KalshiAdvanceOdds[] = [];
+    for (const [title, teams] of tieMap) {
+      if (teams.length >= 2) {
+        results.push({
+          title,
+          team1Name: teams[0].team,
+          team1Prob: teams[0].prob,
+          team2Name: teams[1].team,
+          team2Prob: teams[1].prob,
+          isSettled: teams[0].settled && teams[1].settled,
+        });
+      }
+    }
+
+    const active = results.filter(r => !r.isSettled);
+    console.log(`[Kalshi] ${seriesTicker}: ${active.length} active advance ties, ${results.length} total`);
+    setCache(cacheKey, results);
+    return results;
+  } catch (error) {
+    console.error(`[Kalshi] Error fetching advance odds ${seriesTicker}:`, error);
+    return [];
+  }
+}
+
+// Derive implied advance odds from tournament winner probabilities
+// If no direct advance markets exist, use relative tournament odds as a proxy
+function deriveImpliedAdvance(team1Name: string, team2Name: string, kalshiOdds: KalshiTournamentOdds[]): { team1: number; team2: number } | null {
+  const t1Odds = getTeamOdds(team1Name, kalshiOdds);
+  const t2Odds = getTeamOdds(team2Name, kalshiOdds);
+  if (t1Odds === null && t2Odds === null) return null;
+
+  const t1 = t1Odds || 0;
+  const t2 = t2Odds || 0;
+  const total = t1 + t2;
+  if (total === 0) return null;
+
+  // Normalize relative tournament odds to sum to ~100%
+  // This isn't perfect but gives a reasonable implied advance probability
+  const t1Advance = Math.round((t1 / total) * 100);
+  const t2Advance = Math.round((t2 / total) * 100);
+  return { team1: t1Advance, team2: t2Advance };
+}
+
+// Match advance odds to a specific tie
+function getAdvanceOddsForTie(
+  team1Name: string,
+  team2Name: string,
+  advanceOdds: KalshiAdvanceOdds[]
+): { team1: number; team2: number } | null {
+  for (const ao of advanceOdds) {
+    // Check both orderings
+    const t1MatchesFirst = matchCupTeam(ao.team1Name, team1Name) && matchCupTeam(ao.team2Name, team2Name);
+    const t1MatchesSecond = matchCupTeam(ao.team1Name, team2Name) && matchCupTeam(ao.team2Name, team1Name);
+    if (t1MatchesFirst) {
+      return { team1: ao.team1Prob, team2: ao.team2Prob };
+    }
+    if (t1MatchesSecond) {
+      return { team1: ao.team2Prob, team2: ao.team1Prob };
+    }
+  }
+  return null;
 }
 
 // Team name matching for Kalshi -> ESPN
@@ -188,7 +298,7 @@ async function fetchCupEvents(espnSlug: string): Promise<any[]> {
 }
 
 // Group events into ties (two-leg matchups between same teams)
-function groupIntoTies(events: any[], kalshiOdds: KalshiTournamentOdds[]): { ties: CupTie[]; roundName: string }[] {
+function groupIntoTies(events: any[], kalshiOdds: KalshiTournamentOdds[], advanceOdds: KalshiAdvanceOdds[]): { ties: CupTie[]; roundName: string }[] {
   // Parse all events into matches first
   interface ParsedMatch {
     id: string;
@@ -368,6 +478,25 @@ function groupIntoTies(events: any[], kalshiOdds: KalshiTournamentOdds[]): { tie
     const team1Odds = getTeamOdds(team1.name, kalshiOdds);
     const team2Odds = getTeamOdds(team2.name, kalshiOdds);
 
+    // Get advance odds: first try direct Kalshi advance markets, then derive from tournament odds
+    let team1AdvanceOdds: number | null = null;
+    let team2AdvanceOdds: number | null = null;
+    let advanceOddsSource: "kalshi" | "implied" | "none" = "none";
+
+    const directAdvance = getAdvanceOddsForTie(team1.name, team2.name, advanceOdds);
+    if (directAdvance && !winner) {
+      team1AdvanceOdds = directAdvance.team1;
+      team2AdvanceOdds = directAdvance.team2;
+      advanceOddsSource = "kalshi";
+    } else if (!winner) {
+      const implied = deriveImpliedAdvance(team1.name, team2.name, kalshiOdds);
+      if (implied) {
+        team1AdvanceOdds = implied.team1;
+        team2AdvanceOdds = implied.team2;
+        advanceOddsSource = "implied";
+      }
+    }
+
     const tie: CupTie = {
       team1,
       team2,
@@ -378,6 +507,9 @@ function groupIntoTies(events: any[], kalshiOdds: KalshiTournamentOdds[]): { tie
       isComplete: !!winner || isComplete,
       team1TournamentOdds: team1Odds,
       team2TournamentOdds: team2Odds,
+      team1AdvanceOdds,
+      team2AdvanceOdds,
+      advanceOddsSource,
     };
 
     roundMap.get(roundName)!.push(tie);
@@ -473,16 +605,18 @@ export async function fetchEuropeanCupData(slug: string): Promise<EuropeanCupDat
   const config = EURO_CUP_CONFIG[slug];
   if (!config) throw new Error(`Unknown European cup: ${slug}`);
 
-  // Fetch ESPN events and Kalshi odds in parallel
-  const [events, kalshiOdds] = await Promise.all([
+  // Fetch ESPN events, Kalshi tournament odds, and advance odds in parallel
+  const advanceTicker = ADVANCE_SERIES[slug];
+  const [events, kalshiOdds, advanceOdds] = await Promise.all([
     fetchCupEvents(config.espnSlug),
     fetchTournamentOdds(config.kalshiTicker).catch(() => []),
+    fetchAdvanceOdds(advanceTicker).catch(() => [] as KalshiAdvanceOdds[]),
   ]);
 
-  console.log(`[EuroCup] ${config.shortName}: ${events.length} events, ${kalshiOdds.length} Kalshi markets`);
+  console.log(`[EuroCup] ${config.shortName}: ${events.length} events, ${kalshiOdds.length} Kalshi markets, ${advanceOdds.length} advance markets`);
 
   // Group into rounds and ties
-  const roundsData = groupIntoTies(events, kalshiOdds);
+  const roundsData = groupIntoTies(events, kalshiOdds, advanceOdds);
 
   // Build CupRound objects — filter out placeholder rounds (where teams are "TBD Winner")
   const allTies: CupTie[] = [];
