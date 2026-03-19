@@ -1,6 +1,5 @@
 import type { LeagueSlug } from "@shared/schema";
-
-const KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2";
+import { fetchKalshiMarkets as fetchKalshiMarketsRaw } from "./kalshi-client";
 
 // Cache for Kalshi data (refresh every 30 minutes)
 interface KalshiCache<T> {
@@ -118,43 +117,12 @@ export interface LeagueOdds {
   lastUpdated: string;
 }
 
-async function fetchKalshiMarkets(seriesTicker: string, retries = 2): Promise<any[]> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      // Don't filter by status — some markets switch between open/active
-      const res = await fetch(
-        `${KALSHI_BASE}/markets?limit=40&series_ticker=${seriesTicker}`,
-        {
-          headers: {
-            "Accept": "application/json",
-            "User-Agent": "EuroFootballHub/2.0",
-          },
-        }
-      );
-      if (!res.ok) {
-        console.error(`[Kalshi] API error: ${res.status} for ${seriesTicker} (attempt ${attempt + 1})`);
-        if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-          continue;
-        }
-        return [];
-      }
-      const data = await res.json();
-      const markets = data.markets || [];
-      // Filter out finalized/settled markets — keep open + active
-      const liveMarkets = markets.filter((m: any) => m.status !== "finalized" && m.status !== "settled");
-      console.log(`[Kalshi] ${seriesTicker}: ${liveMarkets.length} live markets (${markets.length} total)`);
-      return liveMarkets;
-    } catch (error) {
-      console.error(`[Kalshi] Error fetching ${seriesTicker} (attempt ${attempt + 1}):`, error);
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      return [];
-    }
-  }
-  return [];
+async function fetchKalshiMarkets(seriesTicker: string): Promise<any[]> {
+  const markets = await fetchKalshiMarketsRaw(seriesTicker);
+  // Filter out finalized/settled markets — keep open + active
+  const liveMarkets = markets.filter((m: any) => m.status !== "finalized" && m.status !== "settled");
+  console.log(`[Kalshi] ${seriesTicker}: ${liveMarkets.length} live markets (${markets.length} total)`);
+  return liveMarkets;
 }
 
 function parseMarkets(markets: any[]): KalshiOdds[] {

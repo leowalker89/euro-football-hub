@@ -1,7 +1,7 @@
 import { EURO_CUP_CONFIG, type EuropeanCupData, type CupTeam, type CupMatch, type CupTie, type CupRound, type CupFavorite, type MatchOdds } from "@shared/schema";
+import { fetchKalshiMarkets as fetchKalshiMarketsRaw } from "./kalshi-client";
 
 const ESPN_BASE = "https://site.api.espn.com/apis";
-const KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2";
 
 // ---- Caching ----
 interface CacheEntry<T> { data: T; timestamp: number; }
@@ -59,15 +59,7 @@ async function fetchTournamentOdds(kalshiTicker: string): Promise<KalshiTourname
   if (cached) return cached;
 
   try {
-    const res = await fetch(`${KALSHI_BASE}/markets?limit=40&series_ticker=${kalshiTicker}`, {
-      headers: { "Accept": "application/json", "User-Agent": "EuroFootballHub/2.0" },
-    });
-    if (!res.ok) {
-      console.error(`[Kalshi] Cup API error: ${res.status} for ${kalshiTicker}`);
-      return [];
-    }
-    const data = await res.json();
-    const markets = data.markets || [];
+    const markets = await fetchKalshiMarketsRaw(kalshiTicker);
 
     const odds: KalshiTournamentOdds[] = markets
       .map((m: any) => ({
@@ -96,15 +88,7 @@ async function fetchAdvanceOdds(seriesTicker: string | undefined): Promise<Kalsh
   if (cached) return cached;
 
   try {
-    const res = await fetch(`${KALSHI_BASE}/markets?limit=40&series_ticker=${seriesTicker}`, {
-      headers: { "Accept": "application/json", "User-Agent": "EuroFootballHub/2.0" },
-    });
-    if (!res.ok) {
-      console.error(`[Kalshi] Advance API error: ${res.status} for ${seriesTicker}`);
-      return [];
-    }
-    const data = await res.json();
-    const markets = data.markets || [];
+    const markets = await fetchKalshiMarketsRaw(seriesTicker);
 
     // Group markets by title (each tie has 2 markets)
     const tieMap = new Map<string, { team: string; prob: number; settled: boolean }[]>();

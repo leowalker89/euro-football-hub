@@ -118,33 +118,18 @@ function inferRound(totalMatches: number, upcomingCount: number, completedCount:
 }
 
 // ---- Kalshi Tournament Winner Odds ----
-const KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2";
+import { fetchKalshiMarkets as fetchKalshiMarketsRaw } from "./kalshi-client";
+
 const kalshiCache = new Map<string, CacheEntry<DomesticCupFavorite[]>>();
 const KALSHI_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function fetchDomesticCupOdds(kalshiTicker: string, allMatches: DomesticCupMatch[], retryCount = 0): Promise<DomesticCupFavorite[]> {
+async function fetchDomesticCupOdds(kalshiTicker: string, allMatches: DomesticCupMatch[]): Promise<DomesticCupFavorite[]> {
   const cacheKey = `kalshi:domestic:${kalshiTicker}`;
   const cached = kalshiCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < KALSHI_CACHE_TTL) return cached.data;
 
   try {
-    const res = await fetch(`${KALSHI_BASE}/markets?limit=40&series_ticker=${kalshiTicker}`, {
-      headers: { "Accept": "application/json", "User-Agent": "EuroFootballHub/2.0" },
-    });
-    if (res.status === 429 && retryCount < 3) {
-      const waitMs = (retryCount + 1) * 2000;
-      console.log(`[Kalshi] Rate limited on ${kalshiTicker}, retrying in ${waitMs}ms (attempt ${retryCount + 1})`);
-      await sleep(waitMs);
-      return fetchDomesticCupOdds(kalshiTicker, allMatches, retryCount + 1);
-    }
-    if (!res.ok) {
-      console.error(`[Kalshi] Domestic cup API error: ${res.status} for ${kalshiTicker}`);
-      return [];
-    }
-    const data = await res.json();
-    const markets = data.markets || [];
+    const markets = await fetchKalshiMarketsRaw(kalshiTicker);
 
     // Normalize: strip diacritics, lowercase, trim
     const norm = (s: string) =>
@@ -322,8 +307,7 @@ export async function fetchAllDomesticCups(): Promise<DomesticCupData[]> {
   for (const slug of slugs) {
     const data = await fetchDomesticCupData(slug);
     results.push(data);
-    // Small delay between cups to avoid rate-limiting on Kalshi
-    await sleep(500);
+    // Rate-limiting is now handled by the centralized kalshi-client
   }
   return results;
 }
