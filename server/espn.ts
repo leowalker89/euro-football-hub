@@ -447,10 +447,8 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
         const enriched = { ...team };
         if (isTitleTeam) {
           enriched.isTitleContender = true;
-        }
-        // Show title odds for ANY team that has >0% Kalshi odds, not just contenders
-        if (titleOddsVal !== null && titleOddsVal > 0) {
-          enriched.titleOdds = `${titleOddsVal}%`;
+          // Only show title odds badge on actual title contenders
+          if (titleOddsVal !== null) enriched.titleOdds = `${titleOddsVal}%`;
         }
         euroTeams.push(enriched);
       }
