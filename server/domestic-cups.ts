@@ -146,11 +146,15 @@ async function fetchDomesticCupOdds(kalshiTicker: string, allMatches: DomesticCu
     const data = await res.json();
     const markets = data.markets || [];
 
+    // Normalize: strip diacritics, lowercase, trim
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
     // Build a set of team logos from ESPN match data for cross-referencing
     const teamLogos = new Map<string, string>();
     for (const match of allMatches) {
-      if (match.homeTeam.logo) teamLogos.set(match.homeTeam.name.toLowerCase(), match.homeTeam.logo);
-      if (match.awayTeam.logo) teamLogos.set(match.awayTeam.name.toLowerCase(), match.awayTeam.logo);
+      if (match.homeTeam.logo) teamLogos.set(norm(match.homeTeam.name), match.homeTeam.logo);
+      if (match.awayTeam.logo) teamLogos.set(norm(match.awayTeam.name), match.awayTeam.logo);
     }
 
     const favorites: DomesticCupFavorite[] = markets
@@ -161,7 +165,7 @@ async function fetchDomesticCupOdds(kalshiTicker: string, allMatches: DomesticCu
 
         // Try to find the team logo from ESPN data
         let teamLogo: string | undefined;
-        const nameLower = teamName.toLowerCase();
+        const nameLower = norm(teamName);
         for (const [espnName, logo] of teamLogos) {
           if (espnName.includes(nameLower) || nameLower.includes(espnName) ||
               espnName.includes(nameLower.split(" ")[0]) || nameLower.includes(espnName.split(" ")[0])) {
@@ -250,33 +254,47 @@ export async function fetchDomesticCupData(slug: string): Promise<DomesticCupDat
   }
 
   // Derive implied match odds from tournament winner probabilities
-  // If team A has 30% to win the tournament and team B has 10%, their head-to-head
-  // implied probability is roughly A: 30/(30+10) = 75%, B: 25%
+  // Uses a floor probability so no team ever shows 100% or 0% pre-match.
+  // A team not in the Kalshi market (or at 0%) gets a minimum floor, so the
+  // ratio reflects the gap in quality without implying a certain outcome.
+  const FLOOR_PROB = 1;    // minimum assumed tournament % for any team in a match
+  const MAX_MATCH_ODDS = 92; // cap: no pre-match implied odds above this
+  const MIN_MATCH_ODDS = 8;  // floor: no pre-match implied odds below this
+
+  // Normalize team names: strip accents, lowercase, trim
+  const normalize = (s: string) =>
+    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+  const findFavorite = (teamName: string) => {
+    if (!favorites || favorites.length === 0) return undefined;
+    const mn = normalize(teamName);
+    return favorites.find(f => {
+      const fn = normalize(f.teamName);
+      return fn === mn || fn.includes(mn) || mn.includes(fn) ||
+        fn.split(" ")[0] === mn.split(" ")[0];
+    });
+  };
+
   const enrichedUpcoming = upcoming.slice(0, 8).map(match => {
     if (!favorites || favorites.length === 0) return match;
-    const homeFav = favorites.find(f => {
-      const fn = f.teamName.toLowerCase();
-      const mn = match.homeTeam.name.toLowerCase();
-      return fn === mn || fn.includes(mn) || mn.includes(fn) ||
-        fn.split(" ")[0] === mn.split(" ")[0];
-    });
-    const awayFav = favorites.find(f => {
-      const fn = f.teamName.toLowerCase();
-      const mn = match.awayTeam.name.toLowerCase();
-      return fn === mn || fn.includes(mn) || mn.includes(fn) ||
-        fn.split(" ")[0] === mn.split(" ")[0];
-    });
-    const homeProb = homeFav?.probability || 0;
-    const awayProb = awayFav?.probability || 0;
+    const homeFav = findFavorite(match.homeTeam.name);
+    const awayFav = findFavorite(match.awayTeam.name);
+    const homeRaw = homeFav?.probability || 0;
+    const awayRaw = awayFav?.probability || 0;
+
+    // Both teams missing from Kalshi — skip odds entirely
+    if (homeRaw === 0 && awayRaw === 0) return match;
+
+    // Apply floor so neither side can be 0
+    const homeProb = Math.max(homeRaw, FLOOR_PROB);
+    const awayProb = Math.max(awayRaw, FLOOR_PROB);
     const total = homeProb + awayProb;
-    if (total > 0) {
-      return {
-        ...match,
-        homeOdds: Math.round((homeProb / total) * 100),
-        awayOdds: Math.round((awayProb / total) * 100),
-      };
-    }
-    return match;
+
+    // Compute and clamp to [MIN, MAX]
+    const homeOdds = Math.min(MAX_MATCH_ODDS, Math.max(MIN_MATCH_ODDS, Math.round((homeProb / total) * 100)));
+    const awayOdds = Math.min(MAX_MATCH_ODDS, Math.max(MIN_MATCH_ODDS, Math.round((awayProb / total) * 100)));
+
+    return { ...match, homeOdds, awayOdds };
   });
 
   const result: DomesticCupData = {
