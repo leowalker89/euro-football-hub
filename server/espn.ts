@@ -507,19 +507,35 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
     const isWithinPointGap = firstRelTeam && team.points - firstRelTeam.points <= REL_POINT_GAP;
 
     if (isInRelZone || isBottomN || isWithinPointGap) {
-      // Enrich with relegation odds from Kalshi
       const relOdds = kalshiOdds
         ? getRelegationOddsForTeam(team.teamName, kalshiOdds)
         : null;
       const enriched = { ...team };
-      // Show relegation odds if >=5% (user wants odds down to 5% chance)
-      if (relOdds !== null && relOdds >= 5) {
-        enriched.relegationOdds = `${relOdds}%`;
+      // Store raw odds for backfill pass (will decide on display after sorting)
+      if (relOdds !== null && relOdds > 0) {
+        (enriched as any)._rawRelOdds = relOdds;
       }
       relTeams.push(enriched);
     }
   }
   relTeams.sort((a, b) => a.rank - b.rank);
+
+  // Backfill relegation odds: show >=5% by default, but if a higher-ranked team
+  // (further from relegation) shows odds, all teams below them must also show odds.
+  // This prevents gaps like Nice (no odds) sitting between teams that do show odds.
+  let oddsShowing = false;
+  for (const team of relTeams) {
+    const raw = (team as any)._rawRelOdds as number | undefined;
+    if (raw !== undefined && raw >= 5) {
+      oddsShowing = true;
+    }
+    if (oddsShowing && raw !== undefined && raw > 0) {
+      team.relegationOdds = `${raw}%`;
+    } else if (raw !== undefined && raw >= 5) {
+      team.relegationOdds = `${raw}%`;
+    }
+    delete (team as any)._rawRelOdds;
+  }
 
   const relGap = lastSafeTeam && firstRelTeam ? lastSafeTeam.points - firstRelTeam.points : 0;
   const relInsight = relGap <= 3
