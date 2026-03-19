@@ -285,6 +285,8 @@ export const domesticCupMatchSchema = z.object({
   }),
   note: z.string().optional(), // e.g. "advances 5-3 on penalties"
   round: z.string().optional(), // e.g. "Quarter-Final"
+  homeOdds: z.number().optional(), // implied match win % derived from tournament winner odds
+  awayOdds: z.number().optional(),
 });
 
 export type DomesticCupMatch = z.infer<typeof domesticCupMatchSchema>;

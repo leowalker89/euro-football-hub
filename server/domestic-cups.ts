@@ -249,6 +249,36 @@ export async function fetchDomesticCupData(slug: string): Promise<DomesticCupDat
     if (favorites.length === 0) favorites = undefined;
   }
 
+  // Derive implied match odds from tournament winner probabilities
+  // If team A has 30% to win the tournament and team B has 10%, their head-to-head
+  // implied probability is roughly A: 30/(30+10) = 75%, B: 25%
+  const enrichedUpcoming = upcoming.slice(0, 8).map(match => {
+    if (!favorites || favorites.length === 0) return match;
+    const homeFav = favorites.find(f => {
+      const fn = f.teamName.toLowerCase();
+      const mn = match.homeTeam.name.toLowerCase();
+      return fn === mn || fn.includes(mn) || mn.includes(fn) ||
+        fn.split(" ")[0] === mn.split(" ")[0];
+    });
+    const awayFav = favorites.find(f => {
+      const fn = f.teamName.toLowerCase();
+      const mn = match.awayTeam.name.toLowerCase();
+      return fn === mn || fn.includes(mn) || mn.includes(fn) ||
+        fn.split(" ")[0] === mn.split(" ")[0];
+    });
+    const homeProb = homeFav?.probability || 0;
+    const awayProb = awayFav?.probability || 0;
+    const total = homeProb + awayProb;
+    if (total > 0) {
+      return {
+        ...match,
+        homeOdds: Math.round((homeProb / total) * 100),
+        awayOdds: Math.round((awayProb / total) * 100),
+      };
+    }
+    return match;
+  });
+
   const result: DomesticCupData = {
     slug,
     name: config.name,
@@ -258,7 +288,7 @@ export async function fetchDomesticCupData(slug: string): Promise<DomesticCupDat
     logo: config.logo,
     currentRound,
     recentResults: recentResults.slice(0, 8), // Limit to 8 most recent
-    upcomingMatches: upcoming.slice(0, 8), // Limit to 8 upcoming
+    upcomingMatches: enrichedUpcoming,
     favorites,
     lastUpdated: new Date().toISOString(),
   };

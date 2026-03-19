@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { EuropeanCupData, CupTie, CupRound, CupFavorite, CupMatch, DomesticCupData, DomesticCupMatch, DomesticCupFavorite } from "@shared/schema";
-import { Link } from "wouter";
+import { Link, useRoute, useLocation } from "wouter";
 import { RefreshCw, Trophy, ArrowLeft, ChevronRight, Clock, Check, Swords, Crown, Minus, Globe, Flag, List, GitBranch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -727,6 +727,209 @@ function CompetitionDetail({ cup }: { cup: EuropeanCupData }) {
   );
 }
 
+// ---- Domestic Cup Detail Page ----
+function DomesticCupDetail({ cup }: { cup: DomesticCupData }) {
+  const activeFavs = cup.favorites?.filter(f => !f.isEliminated) || [];
+  const eliminatedFavs = cup.favorites?.filter(f => f.isEliminated) || [];
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <img src={cup.logo} alt={cup.name} className="w-10 h-10 object-contain" loading="lazy" crossOrigin="anonymous" />
+        <div>
+          <h2 className="text-lg font-bold text-foreground">{cup.name}</h2>
+          <p className="text-xs text-muted-foreground">{cup.currentRound} {cup.countryFlag}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Matches */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Upcoming Matches */}
+          {cup.upcomingMatches.length > 0 && (
+            <Card className="bg-card border-card-border overflow-hidden">
+              <div className="px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Upcoming — {cup.currentRound}</span>
+                  {cup.upcomingMatches.some(m => m.homeOdds != null) && (
+                    <span className="text-[10px] text-muted-foreground/50 ml-auto">implied odds</span>
+                  )}
+                </div>
+              </div>
+              <div className="divide-y divide-border/30">
+                {cup.upcomingMatches.map(match => (
+                  <div key={match.id} className="px-4 py-3">
+                    <DomesticMatchDetailRow match={match} />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Recent Results */}
+          {cup.recentResults.length > 0 && (
+            <Card className="bg-card border-card-border overflow-hidden">
+              <div className="px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent Results</span>
+                </div>
+              </div>
+              <div className="divide-y divide-border/30">
+                {cup.recentResults.map(match => (
+                  <div key={match.id} className="px-4 py-3">
+                    <DomesticMatchDetailRow match={match} />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Right: Tournament Winner Odds */}
+        <div className="space-y-4">
+          {activeFavs.length > 0 && (
+            <Card className="bg-card border-card-border overflow-hidden">
+              <div className="px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Win {cup.shortName}</span>
+                  <span className="text-[10px] text-muted-foreground/50 ml-auto">via Kalshi</span>
+                </div>
+              </div>
+              <div className="divide-y divide-border/50">
+                {activeFavs.map((fav, i) => (
+                  <div key={fav.teamName} className="flex items-center gap-2 px-4 py-2">
+                    <span className="text-[10px] text-muted-foreground tabular-nums w-4">{i + 1}</span>
+                    {fav.teamLogo && (
+                      <img src={fav.teamLogo} alt="" className="w-4 h-4 object-contain" loading="lazy" crossOrigin="anonymous" />
+                    )}
+                    <span className="text-xs font-medium text-foreground flex-1 truncate">{fav.teamName}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1.5 rounded-full bg-amber-500/30" style={{ width: `${Math.max(fav.probability * 1.5, 6)}px` }} />
+                      <span className="text-xs font-semibold tabular-nums text-amber-400">{fav.probability}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {eliminatedFavs.length > 0 && (
+                <div className="px-4 py-2 border-t border-border bg-muted/20">
+                  <p className="text-[10px] text-muted-foreground/60 mb-1">Eliminated</p>
+                  <div className="flex flex-wrap gap-2">
+                    {eliminatedFavs.map(fav => (
+                      <span key={fav.teamName} className="text-[10px] text-muted-foreground/40 line-through">
+                        {fav.teamName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Match info */}
+          <Card className="bg-card border-card-border overflow-hidden">
+            <div className="px-4 py-3">
+              <p className="text-[10px] text-muted-foreground/60">Total matches shown: {cup.recentResults.length + cup.upcomingMatches.length}</p>
+              {cup.lastUpdated && (
+                <p className="text-[10px] text-muted-foreground/40 mt-1">
+                  Updated {formatDistanceToNow(new Date(cup.lastUpdated), { addSuffix: true })}
+                </p>
+              )}
+              {cup.upcomingMatches.some(m => m.homeOdds != null) && (
+                <p className="text-[10px] text-muted-foreground/40 mt-1 italic">
+                  Match odds are implied from tournament winner probabilities
+                </p>
+              )}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Expanded match row for detail view
+function DomesticMatchDetailRow({ match }: { match: DomesticCupMatch }) {
+  const isScheduled = match.status === "STATUS_SCHEDULED";
+  const isLive = match.status.includes("PROGRESS") || match.status.includes("HALF");
+  const isPenalties = match.statusText.toLowerCase().includes("penalties");
+  const hasOdds = match.homeOdds != null && match.awayOdds != null;
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Home team */}
+      <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+        <span className={`text-sm truncate text-right ${
+          match.homeTeam.winner ? "font-semibold text-foreground" :
+          !isScheduled && !match.homeTeam.winner ? "text-muted-foreground/60" : "text-foreground/80"
+        }`}>
+          {match.homeTeam.name}
+        </span>
+        {hasOdds && isScheduled && match.homeOdds! > 0 && (
+          <span className={`text-[9px] font-bold px-1 py-0.5 rounded border leading-tight flex-shrink-0 ${
+            match.homeOdds! >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" :
+            match.homeOdds! <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" :
+            "bg-amber-600/20 text-amber-300 border-amber-500/30"
+          }`}>{match.homeOdds}%</span>
+        )}
+        {match.homeTeam.logo && (
+          <img src={match.homeTeam.logo} alt="" className="w-6 h-6 object-contain flex-shrink-0" loading="lazy" crossOrigin="anonymous" />
+        )}
+      </div>
+
+      {/* Score / Date */}
+      <div className="flex flex-col items-center flex-shrink-0 w-20">
+        {isScheduled ? (
+          <>
+            <span className="text-xs text-muted-foreground/60">vs</span>
+            <span className="text-[9px] text-muted-foreground/40">{formatMatchDate(match.date)}</span>
+          </>
+        ) : (
+          <>
+            <span className="text-sm font-bold text-foreground tabular-nums">
+              {match.homeTeam.score} - {match.awayTeam.score}
+            </span>
+            {isPenalties && match.homeTeam.penaltyScore != null && (
+              <span className="text-[9px] text-muted-foreground/50">({match.homeTeam.penaltyScore} - {match.awayTeam.penaltyScore} pens)</span>
+            )}
+            <span className={`text-[9px] ${
+              isLive ? "text-green-400 font-medium" : "text-muted-foreground/50"
+            }`}>{isLive ? "LIVE" : isPenalties ? "FT (pens)" : "FT"}</span>
+          </>
+        )}
+      </div>
+
+      {/* Away team */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {match.awayTeam.logo && (
+          <img src={match.awayTeam.logo} alt="" className="w-6 h-6 object-contain flex-shrink-0" loading="lazy" crossOrigin="anonymous" />
+        )}
+        {hasOdds && isScheduled && match.awayOdds! > 0 && (
+          <span className={`text-[9px] font-bold px-1 py-0.5 rounded border leading-tight flex-shrink-0 ${
+            match.awayOdds! >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" :
+            match.awayOdds! <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" :
+            "bg-amber-600/20 text-amber-300 border-amber-500/30"
+          }`}>{match.awayOdds}%</span>
+        )}
+        <span className={`text-sm truncate ${
+          match.awayTeam.winner ? "font-semibold text-foreground" :
+          !isScheduled && !match.awayTeam.winner ? "text-muted-foreground/60" : "text-foreground/80"
+        }`}>
+          {match.awayTeam.name}
+        </span>
+      </div>
+
+      {/* Note (e.g. "Round of 16") */}
+      {match.note && (
+        <span className="text-[9px] text-muted-foreground/40 flex-shrink-0 hidden sm:block">{match.note}</span>
+      )}
+    </div>
+  );
+}
+
 // ---- Skeleton ----
 function CupCardSkeleton() {
   return (
@@ -754,9 +957,9 @@ function DomesticCupCard({ cup }: { cup: DomesticCupData }) {
   const allMatches = [...cup.recentResults, ...cup.upcomingMatches];
 
   return (
-    <Card className="bg-card border-card-border overflow-hidden" data-testid={`cup-card-${cup.slug}`}>
+    <Card className="bg-card border-card-border overflow-hidden hover:border-amber-500/30 transition-colors" data-testid={`cup-card-${cup.slug}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors group">
         <div className="flex items-center gap-3">
           <img src={cup.logo} alt={cup.name} className="w-6 h-6 object-contain" loading="lazy" crossOrigin="anonymous" />
           <div>
@@ -764,6 +967,7 @@ function DomesticCupCard({ cup }: { cup: DomesticCupData }) {
             <p className="text-xs text-muted-foreground">{cup.currentRound} {cup.countryFlag}</p>
           </div>
         </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
       </div>
 
       {/* Upcoming matches */}
@@ -831,11 +1035,12 @@ function DomesticCupCard({ cup }: { cup: DomesticCupData }) {
   );
 }
 
-// Domestic cup match row
+// Domestic cup match row — shows match odds when available
 function DomesticMatchRow({ match }: { match: DomesticCupMatch }) {
   const isScheduled = match.status === "STATUS_SCHEDULED";
   const isLive = match.status.includes("PROGRESS") || match.status.includes("HALF");
   const isPenalties = match.statusText.toLowerCase().includes("penalties");
+  const hasOdds = isScheduled && match.homeOdds != null && match.awayOdds != null;
 
   return (
     <div className={`flex items-center gap-1.5 py-1.5 px-2 rounded text-xs ${
@@ -851,6 +1056,13 @@ function DomesticMatchRow({ match }: { match: DomesticCupMatch }) {
       }`}>
         {match.homeTeam.name}
       </span>
+      {hasOdds && match.homeOdds! > 0 && (
+        <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${
+          match.homeOdds! >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" :
+          match.homeOdds! <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" :
+          "bg-amber-600/20 text-amber-300 border-amber-500/30"
+        }`}>{match.homeOdds}%</span>
+      )}
 
       {/* Score / VS */}
       <span className="text-muted-foreground/50 mx-0.5 flex-shrink-0 tabular-nums">
@@ -871,6 +1083,13 @@ function DomesticMatchRow({ match }: { match: DomesticCupMatch }) {
       }`}>
         {match.awayTeam.name}
       </span>
+      {hasOdds && match.awayOdds! > 0 && (
+        <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${
+          match.awayOdds! >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" :
+          match.awayOdds! <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" :
+          "bg-amber-600/20 text-amber-300 border-amber-500/30"
+        }`}>{match.awayOdds}%</span>
+      )}
 
       <div className="flex-1" />
 
@@ -891,7 +1110,9 @@ function DomesticMatchRow({ match }: { match: DomesticCupMatch }) {
 // ---- Main Page ----
 export default function EuropeanCups() {
   const { refetchInterval } = useAutoRefresh();
-  const [selectedCup, setSelectedCup] = useState<string | null>(null);
+  const [, navigate] = useLocation();
+  const [routeMatch, routeParams] = useRoute("/cup/:slug");
+  const selectedCup = routeMatch ? decodeURIComponent(routeParams!.slug) : null;
 
   const { data: cups, isLoading, error, dataUpdatedAt } = useQuery<EuropeanCupData[]>({
     queryKey: ["/api/european-cups"],
@@ -906,6 +1127,7 @@ export default function EuropeanCups() {
   });
 
   const activeCup = selectedCup ? cups?.find(c => c.slug === selectedCup) : null;
+  const activeDomesticCup = selectedCup ? domesticCups?.find(c => c.slug === selectedCup) : null;
   const latestUpdate = Math.max(dataUpdatedAt || 0);
 
   return (
@@ -960,11 +1182,11 @@ export default function EuropeanCups() {
           </div>
         )}
 
-        {/* Detail view */}
+        {/* Detail view — European cup */}
         {activeCup ? (
           <div>
             <button
-              onClick={() => setSelectedCup(null)}
+              onClick={() => navigate("/cups")}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
               data-testid="back-to-cups"
             >
@@ -984,6 +1206,18 @@ export default function EuropeanCups() {
             </div>
             <CompetitionDetail cup={activeCup} />
           </div>
+        ) : activeDomesticCup ? (
+          <div>
+            <button
+              onClick={() => navigate("/cups")}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
+              data-testid="back-to-cups"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to all competitions
+            </button>
+            <DomesticCupDetail cup={activeDomesticCup} />
+          </div>
         ) : (
           <div className="space-y-8">
             {/* European Cups Section */}
@@ -996,9 +1230,7 @@ export default function EuropeanCups() {
                 {isLoading
                   ? [...Array(3)].map((_, i) => <CupCardSkeleton key={i} />)
                   : cups?.map(cup => (
-                      <div key={cup.slug} onClick={() => setSelectedCup(cup.slug)} className="cursor-pointer">
-                        <CompetitionOverview cup={cup} />
-                      </div>
+                      <CompetitionOverview key={cup.slug} cup={cup} />
                     ))
                 }
               </div>
@@ -1014,7 +1246,11 @@ export default function EuropeanCups() {
                 {domesticLoading
                   ? [...Array(5)].map((_, i) => <CupCardSkeleton key={i} />)
                   : domesticCups?.map(cup => (
-                      <DomesticCupCard key={cup.slug} cup={cup} />
+                      <Link key={cup.slug} href={`/cup/${encodeURIComponent(cup.slug)}`}>
+                        <div className="cursor-pointer">
+                          <DomesticCupCard cup={cup} />
+                        </div>
+                      </Link>
                     ))
                 }
               </div>
