@@ -493,13 +493,19 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
   const firstRelTeam = standings[totalTeams - relSpots]; // first team in relegation
   const lastSafeTeam = standings[totalTeams - relSpots - 1]; // last team above relegation
 
+  // Always show at least bottom 6 teams, expand up to 8 if within 8pts of the drop zone
+  const MIN_REL_TEAMS = 6;
+  const MAX_REL_TEAMS = 8;
+  const REL_POINT_GAP = 8; // points above the relegation line to include
+
   const relTeams: StandingEntry[] = [];
   for (let i = standings.length - 1; i >= 0; i--) {
     const team = standings[i];
     const isInRelZone = team.zone?.toLowerCase().includes("relegation");
-    const gapToSafety = lastSafeTeam ? lastSafeTeam.points - team.points : 0;
-    // Include relegated teams + those within 6 points of the drop zone
-    if (isInRelZone || (firstRelTeam && team.points - firstRelTeam.points <= 6 && team.rank >= totalTeams - relSpots - 3)) {
+    const isBottomN = team.rank > totalTeams - MIN_REL_TEAMS; // always include bottom 6
+    const isWithinPointGap = firstRelTeam && team.points - firstRelTeam.points <= REL_POINT_GAP;
+
+    if (isInRelZone || isBottomN || isWithinPointGap) {
       // Enrich with relegation odds from Kalshi
       const relOdds = kalshiOdds
         ? getRelegationOddsForTeam(team.teamName, kalshiOdds)
@@ -521,7 +527,7 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
   battles.push({
     type: "relegation",
     label: "Relegation Battle",
-    teams: relTeams.slice(0, 7),
+    teams: relTeams.slice(0, MAX_REL_TEAMS),
     gapFromTarget: relGap,
     insight: relInsight,
     isCompetitive: relGap <= 6,
