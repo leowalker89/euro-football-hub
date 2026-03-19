@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { EuropeanCupData, CupTie, CupRound, CupFavorite, CupMatch, DomesticCupData, DomesticCupMatch } from "@shared/schema";
+import type { EuropeanCupData, CupTie, CupRound, CupFavorite, CupMatch, DomesticCupData, DomesticCupMatch, DomesticCupFavorite } from "@shared/schema";
 import { Link } from "wouter";
 import { RefreshCw, Trophy, ArrowLeft, ChevronRight, Clock, Check, Swords, Crown, Minus, Globe, Flag, List, GitBranch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -783,7 +783,7 @@ function DomesticCupCard({ cup }: { cup: DomesticCupData }) {
 
       {/* Recent results */}
       {cup.recentResults.length > 0 && (
-        <div className="px-4 py-3">
+        <div className={`px-4 py-3 ${cup.favorites && cup.favorites.length > 0 ? 'border-b border-border' : ''}`}>
           <div className="flex items-center gap-2 mb-2">
             <Check className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent Results</span>
@@ -799,7 +799,30 @@ function DomesticCupCard({ cup }: { cup: DomesticCupData }) {
         </div>
       )}
 
-      {allMatches.length === 0 && (
+      {/* Tournament winner odds */}
+      {cup.favorites && cup.favorites.length > 0 && (
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Crown className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Win {cup.shortName}</span>
+            <span className="text-[10px] text-muted-foreground/50 ml-auto">via Kalshi</span>
+          </div>
+          <div className="space-y-1">
+            {cup.favorites.filter(f => !f.isEliminated).slice(0, 5).map((fav, i) => (
+              <div key={fav.teamName} className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground tabular-nums w-3">{i + 1}</span>
+                {fav.teamLogo && (
+                  <img src={fav.teamLogo} alt="" className="w-3.5 h-3.5 object-contain" loading="lazy" crossOrigin="anonymous" />
+                )}
+                <span className="text-[11px] text-foreground/80 flex-1 truncate">{fav.teamName}</span>
+                <span className="text-[11px] font-semibold tabular-nums text-amber-400">{fav.probability}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allMatches.length === 0 && !cup.favorites?.length && (
         <div className="px-4 py-6 text-center">
           <p className="text-xs text-muted-foreground/50">No current matches</p>
         </div>

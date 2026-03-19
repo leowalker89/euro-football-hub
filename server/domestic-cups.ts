@@ -1,4 +1,4 @@
-import { DOMESTIC_CUP_CONFIG, type DomesticCupData, type DomesticCupMatch } from "@shared/schema";
+import { DOMESTIC_CUP_CONFIG, type DomesticCupData, type DomesticCupMatch, type DomesticCupFavorite } from "@shared/schema";
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
 
@@ -117,6 +117,78 @@ function inferRound(totalMatches: number, upcomingCount: number, completedCount:
   return "Early Rounds";
 }
 
+// ---- Kalshi Tournament Winner Odds ----
+const KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2";
+const kalshiCache = new Map<string, CacheEntry<DomesticCupFavorite[]>>();
+const KALSHI_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchDomesticCupOdds(kalshiTicker: string, allMatches: DomesticCupMatch[], retryCount = 0): Promise<DomesticCupFavorite[]> {
+  const cacheKey = `kalshi:domestic:${kalshiTicker}`;
+  const cached = kalshiCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < KALSHI_CACHE_TTL) return cached.data;
+
+  try {
+    const res = await fetch(`${KALSHI_BASE}/markets?limit=40&series_ticker=${kalshiTicker}`, {
+      headers: { "Accept": "application/json", "User-Agent": "EuroFootballHub/2.0" },
+    });
+    if (res.status === 429 && retryCount < 3) {
+      const waitMs = (retryCount + 1) * 2000;
+      console.log(`[Kalshi] Rate limited on ${kalshiTicker}, retrying in ${waitMs}ms (attempt ${retryCount + 1})`);
+      await sleep(waitMs);
+      return fetchDomesticCupOdds(kalshiTicker, allMatches, retryCount + 1);
+    }
+    if (!res.ok) {
+      console.error(`[Kalshi] Domestic cup API error: ${res.status} for ${kalshiTicker}`);
+      return [];
+    }
+    const data = await res.json();
+    const markets = data.markets || [];
+
+    // Build a set of team logos from ESPN match data for cross-referencing
+    const teamLogos = new Map<string, string>();
+    for (const match of allMatches) {
+      if (match.homeTeam.logo) teamLogos.set(match.homeTeam.name.toLowerCase(), match.homeTeam.logo);
+      if (match.awayTeam.logo) teamLogos.set(match.awayTeam.name.toLowerCase(), match.awayTeam.logo);
+    }
+
+    const favorites: DomesticCupFavorite[] = markets
+      .map((m: any) => {
+        const teamName = m.no_sub_title || m.yes_sub_title || "";
+        const probability = Math.round(parseFloat(m.last_price_dollars || "0") * 100);
+        const isEliminated = m.status === "finalized" || m.status === "settled";
+
+        // Try to find the team logo from ESPN data
+        let teamLogo: string | undefined;
+        const nameLower = teamName.toLowerCase();
+        for (const [espnName, logo] of teamLogos) {
+          if (espnName.includes(nameLower) || nameLower.includes(espnName) ||
+              espnName.includes(nameLower.split(" ")[0]) || nameLower.includes(espnName.split(" ")[0])) {
+            teamLogo = logo;
+            break;
+          }
+        }
+
+        return { teamName, probability, isEliminated, teamLogo };
+      })
+      .filter((f: DomesticCupFavorite) => f.teamName && (f.probability > 0 || !f.isEliminated))
+      .sort((a: DomesticCupFavorite, b: DomesticCupFavorite) => {
+        if (a.isEliminated && !b.isEliminated) return 1;
+        if (!a.isEliminated && b.isEliminated) return -1;
+        return b.probability - a.probability;
+      });
+
+    const active = favorites.filter(f => !f.isEliminated);
+    console.log(`[Kalshi] ${kalshiTicker}: ${active.length} active, ${favorites.length} total`);
+    kalshiCache.set(cacheKey, { data: favorites, timestamp: Date.now() });
+    return favorites;
+  } catch (error) {
+    console.error(`[Kalshi] Error fetching domestic cup odds ${kalshiTicker}:`, error);
+    return [];
+  }
+}
+
 export async function fetchDomesticCupData(slug: string): Promise<DomesticCupData> {
   const cacheKey = `domestic-cup:${slug}`;
   const cached = getCached<DomesticCupData>(cacheKey);
@@ -170,6 +242,13 @@ export async function fetchDomesticCupData(slug: string): Promise<DomesticCupDat
   if (upcoming.length === 2) currentRound = "Semi-Finals";
   if (upcoming.length <= 4 && upcoming.length > 2) currentRound = "Quarter-Finals";
 
+  // Fetch Kalshi tournament winner odds if available
+  let favorites: DomesticCupFavorite[] | undefined;
+  if (config.kalshiTicker) {
+    favorites = await fetchDomesticCupOdds(config.kalshiTicker, allMatches);
+    if (favorites.length === 0) favorites = undefined;
+  }
+
   const result: DomesticCupData = {
     slug,
     name: config.name,
@@ -180,6 +259,7 @@ export async function fetchDomesticCupData(slug: string): Promise<DomesticCupDat
     currentRound,
     recentResults: recentResults.slice(0, 8), // Limit to 8 most recent
     upcomingMatches: upcoming.slice(0, 8), // Limit to 8 upcoming
+    favorites,
     lastUpdated: new Date().toISOString(),
   };
 
@@ -189,5 +269,13 @@ export async function fetchDomesticCupData(slug: string): Promise<DomesticCupDat
 
 export async function fetchAllDomesticCups(): Promise<DomesticCupData[]> {
   const slugs = Object.keys(DOMESTIC_CUP_CONFIG);
-  return Promise.all(slugs.map(slug => fetchDomesticCupData(slug)));
+  // Fetch sequentially to avoid Kalshi rate limits (429)
+  const results: DomesticCupData[] = [];
+  for (const slug of slugs) {
+    const data = await fetchDomesticCupData(slug);
+    results.push(data);
+    // Small delay between cups to avoid rate-limiting on Kalshi
+    await sleep(500);
+  }
+  return results;
 }
