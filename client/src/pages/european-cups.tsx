@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { EuropeanCupData, CupTie, CupRound, CupFavorite, CupMatch, DomesticCupData, DomesticCupMatch } from "@shared/schema";
 import { Link } from "wouter";
-import { RefreshCw, Trophy, ArrowLeft, ChevronRight, Clock, Check, Swords, Crown, Minus, Globe, Flag } from "lucide-react";
+import { RefreshCw, Trophy, ArrowLeft, ChevronRight, Clock, Check, Swords, Crown, Minus, Globe, Flag, List, GitBranch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { formatDistanceToNow, format, isToday, isTomorrow } from "date-fns";
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 // Competition color schemes
 const COMP_THEMES: Record<string, { accent: string; accentBg: string; accentBorder: string; badge: string }> = {
@@ -397,25 +397,332 @@ function TieRow({ tie, theme }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"] 
   );
 }
 
+// ---- Bracket Tie Card (compact for bracket view) ----
+function BracketTieCard({ tie, theme, isCompact }: { tie: CupTie; theme: typeof COMP_THEMES["UCL"]; isCompact?: boolean }) {
+  const team1Won = tie.winner === tie.team1.id;
+  const team2Won = tie.winner === tie.team2.id;
+  const odds = getDisplayOdds(tie);
+
+  return (
+    <div className={`rounded-md border bg-card overflow-hidden ${
+      tie.isComplete ? "border-border/40" : "border-border"
+    }`} style={{ minWidth: isCompact ? 160 : 180 }}>
+      {/* Team 1 */}
+      <div className={`flex items-center gap-1.5 px-2 py-1.5 ${
+        team1Won ? theme.accentBg : ""
+      } ${!tie.isComplete ? "" : team1Won ? "" : "opacity-40"}`}>
+        <img src={tie.team1.logo} alt="" className="w-4 h-4 object-contain flex-shrink-0" loading="lazy" crossOrigin="anonymous" />
+        <span className={`text-[11px] font-medium flex-1 truncate ${
+          team1Won ? "text-foreground" : "text-foreground/80"
+        }`}>{tie.team1.abbreviation}</span>
+        {odds.team1 != null && odds.team1 > 0 && !tie.isComplete && (
+          <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${
+            odds.isAdvance
+              ? (odds.team1 >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" : odds.team1 <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" : theme.badge)
+              : theme.badge
+          }`}>{odds.team1}%</span>
+        )}
+        {tie.aggregateScore && (
+          <span className={`text-[11px] font-semibold tabular-nums w-3 text-center ${
+            team1Won ? "text-foreground" : "text-muted-foreground"
+          }`}>{tie.aggregateScore.split("-")[0]}</span>
+        )}
+        {team1Won && <Check className="w-3 h-3 text-green-400 flex-shrink-0" />}
+      </div>
+      {/* Divider */}
+      <div className="border-t border-border/30" />
+      {/* Team 2 */}
+      <div className={`flex items-center gap-1.5 px-2 py-1.5 ${
+        team2Won ? theme.accentBg : ""
+      } ${!tie.isComplete ? "" : team2Won ? "" : "opacity-40"}`}>
+        <img src={tie.team2.logo} alt="" className="w-4 h-4 object-contain flex-shrink-0" loading="lazy" crossOrigin="anonymous" />
+        <span className={`text-[11px] font-medium flex-1 truncate ${
+          team2Won ? "text-foreground" : "text-foreground/80"
+        }`}>{tie.team2.abbreviation}</span>
+        {odds.team2 != null && odds.team2 > 0 && !tie.isComplete && (
+          <span className={`text-[7px] font-bold px-0.5 rounded border leading-tight ${
+            odds.isAdvance
+              ? (odds.team2 >= 60 ? "bg-green-600/20 text-green-300 border-green-500/30" : odds.team2 <= 30 ? "bg-red-600/15 text-red-300 border-red-500/30" : theme.badge)
+              : theme.badge
+          }`}>{odds.team2}%</span>
+        )}
+        {tie.aggregateScore && (
+          <span className={`text-[11px] font-semibold tabular-nums w-3 text-center ${
+            team2Won ? "text-foreground" : "text-muted-foreground"
+          }`}>{tie.aggregateScore.split("-")[1]}</span>
+        )}
+        {team2Won && <Check className="w-3 h-3 text-green-400 flex-shrink-0" />}
+      </div>
+    </div>
+  );
+}
+
+// ---- Empty bracket slot (TBD) ----
+function BracketTBDSlot() {
+  return (
+    <div className="rounded-md border border-dashed border-border/30 bg-card/30 overflow-hidden" style={{ minWidth: 160 }}>
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
+        <div className="w-4 h-4 rounded-full bg-muted/30 flex-shrink-0" />
+        <span className="text-[11px] text-muted-foreground/40 italic">TBD</span>
+      </div>
+      <div className="border-t border-border/20" />
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
+        <div className="w-4 h-4 rounded-full bg-muted/30 flex-shrink-0" />
+        <span className="text-[11px] text-muted-foreground/40 italic">TBD</span>
+      </div>
+    </div>
+  );
+}
+
+// ---- Bracket View (horizontal tournament tree) ----
+function BracketView({ cup, theme }: { cup: EuropeanCupData; theme: typeof COMP_THEMES["UCL"] }) {
+  const bracketRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [svgSize, setSvgSize] = useState({ width: 0, height: 0 });
+  const [connectors, setConnectors] = useState<{ x1: number; y1: number; x2: number; y2: number; won: boolean }[]>([]);
+
+  const roundOrder = ["Knockout Playoff", "Round of 16", "Quarter-finals", "Semi-finals", "Final"];
+  const orderedRounds = roundOrder
+    .map(name => cup.rounds.find(r => r.name === name))
+    .filter(Boolean) as CupRound[];
+
+  const expectedTieCount: Record<string, number> = {
+    "Knockout Playoff": 8,
+    "Round of 16": 8,
+    "Quarter-finals": 4,
+    "Semi-finals": 2,
+    "Final": 1,
+  };
+
+  // Calculate connector lines based on DOM positions
+  const calcConnectors = useCallback(() => {
+    if (!bracketRef.current) return;
+    const container = bracketRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const sl = container.scrollLeft;
+    const st = container.scrollTop;
+
+    // Set SVG size to the full scrollable content
+    setSvgSize({ width: container.scrollWidth, height: container.scrollHeight });
+
+    const newConnectors: typeof connectors = [];
+    const columns = container.querySelectorAll('[data-bracket-round]');
+
+    for (let colIdx = 0; colIdx < columns.length - 1; colIdx++) {
+      const currentCells = columns[colIdx].querySelectorAll('[data-bracket-tie]');
+      const nextCells = columns[colIdx + 1].querySelectorAll('[data-bracket-tie]');
+      const roundName = columns[colIdx].getAttribute('data-bracket-round') || '';
+      const round = orderedRounds.find(r => r.name === roundName);
+
+      for (let j = 0; j < currentCells.length; j += 2) {
+        const nextIdx = Math.floor(j / 2);
+        if (nextIdx >= nextCells.length) break;
+
+        const topEl = currentCells[j];
+        const bottomEl = currentCells[j + 1];
+        const targetEl = nextCells[nextIdx];
+        if (!topEl || !targetEl) continue;
+
+        const topRect = topEl.getBoundingClientRect();
+        const targetRect = targetEl.getBoundingClientRect();
+
+        // Convert from viewport coords to container-scroll coords
+        const ox = containerRect.left - sl;
+        const oy = containerRect.top - st;
+
+        const x1Top = topRect.right - ox;
+        const y1Top = topRect.top + topRect.height / 2 - oy;
+        const x2 = targetRect.left - ox;
+        const y2 = targetRect.top + targetRect.height / 2 - oy;
+
+        const topWon = !!(round?.ties[j]?.winner);
+        newConnectors.push({ x1: x1Top, y1: y1Top, x2, y2, won: topWon });
+
+        if (bottomEl) {
+          const bottomRect = bottomEl.getBoundingClientRect();
+          const x1Bot = bottomRect.right - ox;
+          const y1Bot = bottomRect.top + bottomRect.height / 2 - oy;
+          const bottomWon = !!(round?.ties[j + 1]?.winner);
+          newConnectors.push({ x1: x1Bot, y1: y1Bot, x2, y2, won: bottomWon });
+        }
+      }
+    }
+    setConnectors(newConnectors);
+  }, [orderedRounds]);
+
+  useEffect(() => {
+    const timer = setTimeout(calcConnectors, 150);
+    window.addEventListener('resize', calcConnectors);
+    return () => { clearTimeout(timer); window.removeEventListener('resize', calcConnectors); };
+  }, [calcConnectors, cup]);
+
+  if (orderedRounds.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-xs text-muted-foreground/50">No bracket data available yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      {/* Desktop bracket (horizontal scroll) */}
+      <div
+        ref={bracketRef}
+        className="hidden md:flex gap-0 overflow-x-auto pb-4 relative"
+        style={{ minHeight: 400 }}
+        onScroll={calcConnectors}
+      >
+        {/* SVG connector layer — sized to scroll content */}
+        <svg
+          ref={svgRef}
+          className="absolute top-0 left-0 pointer-events-none"
+          style={{ width: svgSize.width || '100%', height: svgSize.height || '100%', zIndex: 0 }}
+        >
+          {connectors.map((c, i) => {
+            const midX = (c.x1 + c.x2) / 2;
+            return (
+              <path
+                key={i}
+                d={`M${c.x1},${c.y1} C${midX},${c.y1} ${midX},${c.y2} ${c.x2},${c.y2}`}
+                fill="none"
+                stroke={c.won ? "rgba(74,222,128,0.4)" : "rgba(148,163,184,0.25)"}
+                strokeWidth={c.won ? 2 : 1.5}
+                strokeDasharray={c.won ? "none" : "4 3"}
+              />
+            );
+          })}
+        </svg>
+
+        {orderedRounds.map((round, roundIdx) => {
+          const expected = expectedTieCount[round.name] || round.ties.length || 1;
+          const tiesWithPlaceholders = round.ties.length > 0 ? round.ties : Array.from({ length: expected }, () => null);
+          // Vertical spacing grows with each round to vertically center ties
+          const spacingMultiplier = Math.pow(2, roundIdx);
+
+          return (
+            <div
+              key={round.name}
+              data-bracket-round={round.name}
+              className="flex flex-col items-center flex-shrink-0 relative z-10"
+              style={{ minWidth: 210, paddingLeft: roundIdx === 0 ? 0 : 24, paddingRight: 24 }}
+            >
+              {/* Round header */}
+              <div className="mb-3 text-center">
+                <h4 className={`text-[10px] font-medium uppercase tracking-wider ${theme.accent}`}>{round.name}</h4>
+                {round.isCurrent && (
+                  <Badge className={`text-[7px] px-1 py-0 mt-0.5 ${theme.badge}`}>Current</Badge>
+                )}
+              </div>
+              {/* Ties */}
+              <div className="flex flex-col justify-around flex-1 w-full" style={{ gap: `${Math.max(8, 8 * spacingMultiplier)}px` }}>
+                {tiesWithPlaceholders.map((tie, tieIdx) => (
+                  <div key={tieIdx} data-bracket-tie={tieIdx} className="flex items-center justify-center">
+                    {tie ? (
+                      <BracketTieCard tie={tie} theme={theme} />
+                    ) : (
+                      <BracketTBDSlot />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Mobile bracket (vertical stacked) */}
+      <div className="md:hidden space-y-4">
+        {orderedRounds.map((round) => {
+          if (round.ties.length === 0) {
+            return (
+              <div key={round.name} className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <h4 className={`text-xs font-medium uppercase tracking-wider ${theme.accent}`}>{round.name}</h4>
+                  {round.isCurrent && <Badge className={`text-[7px] px-1 py-0 ${theme.badge}`}>Current</Badge>}
+                </div>
+                <div className="border border-dashed border-border/30 rounded-lg px-4 py-4 text-center">
+                  <p className="text-[11px] text-muted-foreground/40">Draw not yet confirmed</p>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={round.name} className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className={`text-xs font-medium uppercase tracking-wider ${theme.accent}`}>{round.name}</h4>
+                {round.isCurrent && <Badge className={`text-[7px] px-1 py-0 ${theme.badge}`}>Current</Badge>}
+                <span className="text-[10px] text-muted-foreground/50">
+                  {round.ties.filter(t => t.isComplete).length}/{round.ties.length} decided
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {round.ties.map((tie, i) => (
+                  <BracketTieCard key={i} tie={tie} theme={theme} isCompact />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---- Competition Detail Page ----
 function CompetitionDetail({ cup }: { cup: EuropeanCupData }) {
   const theme = COMP_THEMES[cup.shortName] || COMP_THEMES.UCL;
+  const [viewMode, setViewMode] = useState<"list" | "bracket">("list");
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Bracket / Rounds */}
-        <div className="lg:col-span-2">
-          {cup.rounds.map((round) => (
-            <RoundSection key={round.name} round={round} theme={theme} />
-          ))}
-        </div>
-
-        {/* Right: Tournament Favorites */}
-        <div>
-          <FavoritesPanel favorites={cup.favorites} theme={theme} shortName={cup.shortName} />
+      {/* View toggle */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="inline-flex items-center rounded-md border border-border bg-muted/30 p-0.5">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              viewMode === "list" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid="view-toggle-list"
+          >
+            <List className="w-3.5 h-3.5" />
+            Rounds
+          </button>
+          <button
+            onClick={() => setViewMode("bracket")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              viewMode === "bracket" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid="view-toggle-bracket"
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            Bracket
+          </button>
         </div>
       </div>
+
+      {viewMode === "bracket" ? (
+        <div className="space-y-4">
+          <BracketView cup={cup} theme={theme} />
+          {/* Favorites panel below bracket */}
+          <FavoritesPanel favorites={cup.favorites} theme={theme} shortName={cup.shortName} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Left: Rounds list */}
+          <div className="lg:col-span-2">
+            {cup.rounds.map((round) => (
+              <RoundSection key={round.name} round={round} theme={theme} />
+            ))}
+          </div>
+
+          {/* Right: Tournament Favorites */}
+          <div>
+            <FavoritesPanel favorites={cup.favorites} theme={theme} shortName={cup.shortName} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
