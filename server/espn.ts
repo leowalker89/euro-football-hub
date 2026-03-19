@@ -393,7 +393,7 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
     const odds = kalshiOdds
       ? getTitleOddsForTeam(team.teamName, kalshiOdds)
       : getFallbackTitleOdds(team.teamName, slug);
-    // If a team has <5% implied odds, skip them
+    // Title contenders need >=5% implied odds to qualify
     // If no odds data exists and gap is large (>10), also skip (avoids false positives)
     const hasRealisticOdds = odds !== null ? odds >= 5 : gap <= 10;
     if (canCatch && plausible && realistic && hasRealisticOdds && team.rank <= 8) {
@@ -447,7 +447,10 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
         const enriched = { ...team };
         if (isTitleTeam) {
           enriched.isTitleContender = true;
-          if (titleOddsVal !== null) enriched.titleOdds = `${titleOddsVal}%`;
+        }
+        // Show title odds for ANY team that has >0% Kalshi odds, not just contenders
+        if (titleOddsVal !== null && titleOddsVal > 0) {
+          enriched.titleOdds = `${titleOddsVal}%`;
         }
         euroTeams.push(enriched);
       }
@@ -511,7 +514,8 @@ export function computeBattles(standings: StandingEntry[], slug: LeagueSlug, kal
         ? getRelegationOddsForTeam(team.teamName, kalshiOdds)
         : null;
       const enriched = { ...team };
-      if (relOdds !== null && relOdds > 0) {
+      // Show relegation odds if >=5% (user wants odds down to 5% chance)
+      if (relOdds !== null && relOdds >= 5) {
         enriched.relegationOdds = `${relOdds}%`;
       }
       relTeams.push(enriched);
