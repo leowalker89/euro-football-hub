@@ -8,7 +8,7 @@ const KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2";
 
 // Global request queue to serialize Kalshi API calls
 let requestQueue: Promise<any> = Promise.resolve();
-const MIN_DELAY_MS = 300; // minimum delay between requests
+const MIN_DELAY_MS = 500; // minimum delay between requests
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const queued = requestQueue.then(async () => {
@@ -54,7 +54,9 @@ export async function fetchKalshiMarkets(
           return [];
         }
         const data = await res.json();
-        return data.markets || [];
+        const markets = data.markets || [];
+        console.log(`[Kalshi] ${seriesTicker}: fetched ${markets.length} markets`);
+        return markets;
       } catch (error) {
         console.error(`[Kalshi] Error fetching ${seriesTicker} (attempt ${attempt + 1}):`, error);
         if (attempt < retries) {

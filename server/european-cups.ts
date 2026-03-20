@@ -71,7 +71,12 @@ async function fetchTournamentOdds(kalshiTicker: string): Promise<KalshiTourname
       .filter((o: KalshiTournamentOdds) => o.teamName);
 
     console.log(`[Kalshi] ${kalshiTicker}: ${odds.filter(o => !o.isEliminated).length} active teams`);
-    setCache(cacheKey, odds);
+    // Only cache if we got actual data
+    if (odds.length > 0) {
+      setCache(cacheKey, odds);
+    } else {
+      console.warn(`[Kalshi] ${kalshiTicker}: no tournament odds, skipping cache`);
+    }
     return odds;
   } catch (error) {
     console.error(`[Kalshi] Error fetching ${kalshiTicker}:`, error);

@@ -164,7 +164,12 @@ export async function fetchLeagueOdds(slug: LeagueSlug): Promise<LeagueOdds> {
   const topRel = odds.relegation.filter(t => t.probability >= 5).map(t => `${t.teamName}(${t.probability}%)`);
   console.log(`[Kalshi] ${slug}: title=[${topTitle.join(", ")}] relegation=[${topRel.join(", ")}]`);
 
-  setCache(cacheKey, odds);
+  // Only cache if we got actual data — don't cache empty results from failed API calls
+  if (odds.title.length > 0 || odds.relegation.length > 0) {
+    setCache(cacheKey, odds);
+  } else {
+    console.warn(`[Kalshi] ${slug}: no odds returned, skipping cache to allow retry`);
+  }
   return odds;
 }
 
