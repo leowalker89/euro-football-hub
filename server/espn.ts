@@ -721,6 +721,26 @@ export async function fetchLeagueData(slug: LeagueSlug): Promise<LeagueData> {
     }
   }
 
+  // Backfill recentForm from match results for teams that ESPN didn't include form data for
+  for (const team of standings) {
+    if (!team.recentForm && recentMatches.length > 0) {
+      const teamMatches = recentMatches
+        .filter(m => m.status === "Full Time" && (m.homeTeam.id === team.teamId || m.awayTeam.id === team.teamId))
+        .slice(0, 5);
+      if (teamMatches.length > 0) {
+        const form = teamMatches.map(m => {
+          const isHome = m.homeTeam.id === team.teamId;
+          const teamScore = isHome ? (m.homeTeam.score ?? 0) : (m.awayTeam.score ?? 0);
+          const oppScore = isHome ? (m.awayTeam.score ?? 0) : (m.homeTeam.score ?? 0);
+          if (teamScore > oppScore) return "W";
+          if (teamScore < oppScore) return "L";
+          return "D";
+        }).join("");
+        team.recentForm = form;
+      }
+    }
+  }
+
   const battles = computeBattles(standings, slug, kalshiOdds || undefined);
   const hasKalshiData = kalshiOdds !== null && (kalshiOdds.title.length > 0 || kalshiOdds.relegation.length > 0);
 
