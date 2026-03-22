@@ -87,29 +87,18 @@ const COMP_COLORS: Record<string, string> = {
   "CdF": "bg-blue-600/20 text-blue-300 border-blue-500/30",
 };
 
-// Compact dot colors for inline competition indicators
-const COMP_DOT_COLORS: Record<string, string> = {
-  "UCL": "bg-blue-400",
-  "UEL": "bg-orange-400",
-  "UECL": "bg-green-400",
-  "FA": "bg-red-400",
-  "CC": "bg-emerald-400",
-  "DFB": "bg-red-400",
-  "CI": "bg-blue-400",
-  "CdR": "bg-red-400",
-  "CdF": "bg-blue-400",
-};
-
 function CompetitionBadges({ competitions }: { competitions?: StandingEntry["activeCompetitions"] }) {
   if (!competitions || competitions.length === 0) return null;
   return (
-    <div className="flex gap-[3px] items-center flex-shrink-0">
+    <div className="flex gap-px items-center">
       {competitions.map((c) => (
         <span
           key={c.slug}
-          className={`w-[7px] h-[7px] rounded-full ${COMP_DOT_COLORS[c.shortName] || "bg-muted-foreground/30"}`}
+          className={`text-[7px] font-bold px-[3px] leading-[13px] rounded-sm border ${COMP_COLORS[c.shortName] || "bg-muted-foreground/10 text-muted-foreground border-muted-foreground/20"}`}
           title={`${c.name}${c.stage ? ` — ${c.stage}` : ""}`}
-        />
+        >
+          {c.shortName}
+        </span>
       ))}
     </div>
   );

@@ -721,23 +721,48 @@ export async function fetchLeagueData(slug: LeagueSlug): Promise<LeagueData> {
     }
   }
 
-  // Backfill recentForm from match results for teams that ESPN didn't include form data for
-  for (const team of standings) {
-    if (!team.recentForm && recentMatches.length > 0) {
-      const teamMatches = recentMatches
-        .filter(m => m.status === "Full Time" && (m.homeTeam.id === team.teamId || m.awayTeam.id === team.teamId))
-        .slice(0, 5);
-      if (teamMatches.length > 0) {
-        const form = teamMatches.map(m => {
-          const isHome = m.homeTeam.id === team.teamId;
-          const teamScore = isHome ? (m.homeTeam.score ?? 0) : (m.awayTeam.score ?? 0);
-          const oppScore = isHome ? (m.awayTeam.score ?? 0) : (m.homeTeam.score ?? 0);
-          if (teamScore > oppScore) return "W";
-          if (teamScore < oppScore) return "L";
-          return "D";
-        }).join("");
-        team.recentForm = form;
+  // Backfill recentForm from match results for teams missing form data or with < 5 entries.
+  // Fetch a wider date range (45 days) to ensure we find enough matches.
+  const teamsNeedingForm = standings.filter(t => !t.recentForm || t.recentForm.length < 5);
+  let extendedMatches: Match[] = recentMatches;
+  if (teamsNeedingForm.length > 0) {
+    try {
+      const now = new Date();
+      const extDates: string[] = [];
+      for (let i = 14; i < 45; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        extDates.push(d.toISOString().slice(0, 10).replace(/-/g, ""));
       }
+      const extraMatches = await fetchMatchesForDates(slug, extDates);
+      const extraCompleted = extraMatches.filter(m => {
+        const st = m.status.toLowerCase();
+        return st.includes("full") || st.includes("final");
+      });
+      extendedMatches = [...recentMatches, ...extraCompleted]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch {
+      // If extended fetch fails, proceed with what we have
+    }
+  }
+  for (const team of teamsNeedingForm) {
+    const teamMatches = extendedMatches
+      .filter(m => {
+        const st = m.status.toLowerCase();
+        return (st.includes("full") || st.includes("final")) &&
+          (m.homeTeam.id === team.teamId || m.awayTeam.id === team.teamId);
+      })
+      .slice(0, 5);
+    if (teamMatches.length > 0) {
+      const form = teamMatches.map(m => {
+        const isHome = m.homeTeam.id === team.teamId;
+        const teamScore = isHome ? (m.homeTeam.score ?? 0) : (m.awayTeam.score ?? 0);
+        const oppScore = isHome ? (m.awayTeam.score ?? 0) : (m.homeTeam.score ?? 0);
+        if (teamScore > oppScore) return "W";
+        if (teamScore < oppScore) return "L";
+        return "D";
+      }).join("");
+      team.recentForm = form;
     }
   }
 
