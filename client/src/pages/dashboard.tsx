@@ -135,47 +135,59 @@ function BattleSection({ battle, icon: Icon, iconColor }: { battle: BattleGroup;
         )}
       </div>
       <div className="space-y-1">
-        {battle.teams.map((team) => (
-          <div key={team.teamId} className={`flex items-center gap-2 py-1 px-2 rounded ${
-            team.isTitleContender ? 'bg-yellow-500/8 border border-yellow-500/20' : getZoneClass(team.zone)
-          }`}>
-            <span className="text-xs font-medium text-muted-foreground w-4 tabular-nums">{team.rank}</span>
-            {team.isTitleContender && (
-              <Trophy className="w-3 h-3 text-yellow-500 flex-shrink-0" />
-            )}
-            <img
-              src={team.teamLogo}
-              alt=""
-              className="w-4 h-4 object-contain"
-              loading="lazy"
-              crossOrigin="anonymous"
-            />
-            <span className={`text-xs font-medium truncate min-w-[60px] ${
-              team.isTitleContender ? 'text-yellow-200' : 'text-foreground'
-            }`}>{team.teamName}</span>
-            {team.titleOdds && (
-              <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-yellow-600/20 text-yellow-300 border-yellow-500/30">
-                {team.titleOdds}
-              </span>
-            )}
-            {team.relegationOdds && (
-              <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-red-600/20 text-red-300 border-red-500/30">
-                {team.relegationOdds}
-              </span>
-            )}
-            <CompetitionBadges competitions={team.activeCompetitions} />
-            <div className="flex-1" />
-            <FormIndicator form={team.recentForm} />
-            {battle.type === "relegation" && team.zone?.toLowerCase().includes("relegation") && !team.relegationOdds && (
-              <Badge variant="destructive" className="text-[8px] px-1 py-0">REL</Badge>
-            )}
-            <span className="text-[10px] text-muted-foreground tabular-nums">{team.gamesPlayed}gp</span>
-            <span className="text-xs font-semibold tabular-nums text-foreground">{team.points}</span>
-            <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right">
-              {team.goalDifference > 0 ? `+${team.goalDifference}` : team.goalDifference}
-            </span>
-          </div>
-        ))}
+        {battle.teams.map((team) => {
+          const hasCompetitions = team.activeCompetitions && team.activeCompetitions.length > 0;
+          return (
+            <div key={team.teamId} className={`py-1.5 px-2 rounded ${
+              team.isTitleContender ? 'bg-yellow-500/8 border border-yellow-500/20' : getZoneClass(team.zone)
+            }`}>
+              {/* Main row: rank, logo, name, odds, stats */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground w-4 tabular-nums flex-shrink-0">{team.rank}</span>
+                {team.isTitleContender && (
+                  <Trophy className="w-3 h-3 text-yellow-500 flex-shrink-0" />
+                )}
+                <img
+                  src={team.teamLogo}
+                  alt=""
+                  className="w-4 h-4 object-contain flex-shrink-0"
+                  loading="lazy"
+                  crossOrigin="anonymous"
+                />
+                <span className={`text-xs font-medium truncate ${
+                  team.isTitleContender ? 'text-yellow-200' : 'text-foreground'
+                }`}>{team.teamName}</span>
+                {team.titleOdds && (
+                  <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-yellow-600/20 text-yellow-300 border-yellow-500/30 flex-shrink-0">
+                    {team.titleOdds}
+                  </span>
+                )}
+                {team.relegationOdds && (
+                  <span className="text-[8px] font-bold px-1 py-0 rounded border leading-tight bg-red-600/20 text-red-300 border-red-500/30 flex-shrink-0">
+                    {team.relegationOdds}
+                  </span>
+                )}
+                {battle.type === "relegation" && team.zone?.toLowerCase().includes("relegation") && !team.relegationOdds && (
+                  <Badge variant="destructive" className="text-[8px] px-1 py-0 flex-shrink-0">REL</Badge>
+                )}
+                <div className="flex-1" />
+                <FormIndicator form={team.recentForm} />
+                <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">{team.gamesPlayed}gp</span>
+                <span className="text-xs font-semibold tabular-nums text-foreground flex-shrink-0">{team.points}</span>
+                <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right flex-shrink-0">
+                  {team.goalDifference > 0 ? `+${team.goalDifference}` : team.goalDifference}
+                </span>
+              </div>
+              {/* Second row: competition badges (only if team has active competitions) */}
+              {hasCompetitions && (
+                <div className="flex items-center gap-1 mt-1 ml-6">
+                  {!team.isTitleContender && <div className="w-4" />}
+                  <CompetitionBadges competitions={team.activeCompetitions} />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       {battle.insight && (
         <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">{battle.insight}</p>
