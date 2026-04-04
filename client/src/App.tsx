@@ -9,6 +9,8 @@ import LeagueDetail from "@/pages/league-detail";
 import EuropeanCups from "@/pages/european-cups";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 function AppRouter() {
   return (
@@ -35,6 +37,8 @@ function App() {
         <Router hook={useHashLocation}>
           <AppRouter />
         </Router>
+        <Analytics />
+        <SpeedInsights />
       </TooltipProvider>
     </QueryClientProvider>
   );

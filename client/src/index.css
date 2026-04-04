@@ -68,10 +68,10 @@
   --destructive-border: hsl(var(--destructive));
 
   /* Zone colors */
-  --zone-ucl: 152 60% 36%;
-  --zone-europa: 36 90% 55%;
-  --zone-conference: 210 70% 50%;
-  --zone-relegation: 0 72% 51%;
+  --zone-ucl: 217 89% 51%;
+  --zone-europa: 28 87% 55%;
+  --zone-conference: 145 63% 42%;
+  --zone-relegation: 4 82% 52%;
 }
 
 .dark {
@@ -131,10 +131,10 @@
   --accent-border: hsl(var(--accent));
   --destructive-border: hsl(var(--destructive));
 
-  --zone-ucl: 152 55% 42%;
-  --zone-europa: 36 85% 58%;
-  --zone-conference: 210 65% 55%;
-  --zone-relegation: 0 68% 52%;
+  --zone-ucl: 217 89% 56%;
+  --zone-europa: 28 87% 58%;
+  --zone-conference: 145 63% 49%;
+  --zone-relegation: 4 82% 56%;
 }
 
 @layer base {
