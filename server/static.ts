@@ -10,10 +10,21 @@ export function serveStatic(app: Express) {
     );
   }
 
+  // Read index.html once and inject Umami analytics script if env vars are set
+  const indexPath = path.resolve(distPath, "index.html");
+  let indexHtml = fs.readFileSync(indexPath, "utf-8");
+
+  const umamiUrl = process.env.UMAMI_URL;
+  const umamiWebsiteId = process.env.UMAMI_WEBSITE_ID;
+  if (umamiUrl && umamiWebsiteId) {
+    const umamiScript = `<script defer src="${umamiUrl}/script.js" data-website-id="${umamiWebsiteId}"></script>`;
+    indexHtml = indexHtml.replace("</head>", `    ${umamiScript}\n  </head>`);
+  }
+
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
   app.use("/{*path}", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.type("html").send(indexHtml);
   });
 }
