@@ -11,13 +11,13 @@ import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { formatDistanceToNow, format, parseISO } from "date-fns";
 
 function getZoneClass(zone?: string): string {
-  if (!zone) return "";
+  if (!zone) return "zone-none";
   const z = zone.toLowerCase();
   if (z.includes("champions")) return "zone-ucl";
-  if (z.includes("europa")) return "zone-europa";
+  if (z.includes("europa") && !z.includes("conference")) return "zone-europa";
   if (z.includes("conference")) return "zone-conference";
   if (z.includes("relegation")) return "zone-relegation";
-  return "";
+  return "zone-none";
 }
 
 function getZoneBadgeLabel(zone?: string): string | null {
@@ -316,8 +316,8 @@ function BattleCard({ battle, icon: Icon, iconColor }: { battle: BattleGroup; ic
           const gap = leader ? leader.points - team.points : 0;
           return (
             <div key={team.teamId} className={`flex items-center gap-2 pl-1 rounded ${
-              team.isTitleContender ? 'bg-yellow-500/8 border border-yellow-500/20 py-1 px-2' : getZoneClass(team.zone)
-            }`}>
+              getZoneClass(team.zone)
+            } ${team.isTitleContender ? 'bg-yellow-500/8 py-1 px-2' : ''}`}>
               {team.isTitleContender && (
                 <Trophy className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
               )}

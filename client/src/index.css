@@ -147,11 +147,12 @@
   }
 }
 
-/* Zone indicator bars for standings */
+/* Zone indicator bars for standings — every row gets a 3px left border for alignment */
 .zone-ucl { border-left: 3px solid hsl(var(--zone-ucl)); }
 .zone-europa { border-left: 3px solid hsl(var(--zone-europa)); }
 .zone-conference { border-left: 3px solid hsl(var(--zone-conference)); }
 .zone-relegation { border-left: 3px solid hsl(var(--zone-relegation)); }
+.zone-none { border-left: 3px solid transparent; }
 
 /* Tabular numbers for standings */
 .tabular-nums {

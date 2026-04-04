@@ -11,13 +11,13 @@ import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { formatDistanceToNow } from "date-fns";
 
 function getZoneClass(zone?: string): string {
-  if (!zone) return "";
+  if (!zone) return "zone-none";
   const z = zone.toLowerCase();
   if (z.includes("champions")) return "zone-ucl";
-  if (z.includes("europa")) return "zone-europa";
+  if (z.includes("europa") && !z.includes("conference")) return "zone-europa";
   if (z.includes("conference")) return "zone-conference";
   if (z.includes("relegation")) return "zone-relegation";
-  return "";
+  return "zone-none";
 }
 
 function getZoneBadge(zone?: string) {
@@ -137,8 +137,8 @@ function BattleSection({ battle, icon: Icon, iconColor }: { battle: BattleGroup;
       <div className="space-y-0.5">
         {battle.teams.map((team) => (
           <div key={team.teamId} className={`flex items-center gap-1.5 py-1 px-2 rounded ${
-            team.isTitleContender ? 'bg-yellow-500/8 border border-yellow-500/20' : getZoneClass(team.zone)
-          }`}>
+            getZoneClass(team.zone)
+          } ${team.isTitleContender ? 'bg-yellow-500/8' : ''}`}>
             {/* Rank */}
             <span className="text-[11px] font-medium text-muted-foreground w-4 tabular-nums flex-shrink-0 text-right">{team.rank}</span>
             {/* Team logo */}
